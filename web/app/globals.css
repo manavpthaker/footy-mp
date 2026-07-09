@@ -1,0 +1,31 @@
+/* Quant Desk design tokens — copied from design/project/tokens/*.
+   These are the source of truth. See design/README.md for the full spec.
+*/
+@import url('../styles/fonts.css');
+@import url('../styles/colors.css');
+@import url('../styles/typography.css');
+@import url('../styles/spacing.css');
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--grad-app);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: var(--lh-base);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }
+input, select, textarea { font-family: inherit; color: inherit; }
+
+.tabular, [data-tabular] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}

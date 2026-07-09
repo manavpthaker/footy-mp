@@ -1,0 +1,26 @@
+name: ingest
+
+# Free scheduled data pulls: ESPN fixtures/results daily, Understat xG daily.
+# Writes into Supabase. Secrets: SUPABASE_URL, SUPABASE_SERVICE_KEY.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"     # 06:00 UTC daily — overnight results + xG
+    - cron: "*/15 * * * *"  # live scores every 15 min (guarded to matchdays in the script)
+  workflow_dispatch: {}
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install -r data/requirements.txt
+      - name: Run ingest
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -m data.pipeline   # orchestrator: espn -> stats -> model -> supabase

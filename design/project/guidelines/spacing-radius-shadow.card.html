@@ -1,0 +1,23 @@
+<!-- @dsCard group="Spacing" viewport="700x140" name="Radius & shadow" subtitle="Corner radii and the hover-lift shadow system" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="../styles.css">
+<style>
+  body{margin:0;background:var(--bg-app);background-image:var(--grad-app);font-family:var(--font-ui);padding:18px}
+  .row{display:flex;gap:14px;align-items:flex-end}
+  .box{width:64px;height:46px;background:var(--surface-raised);border:1px solid var(--border);display:grid;place-items:end center}
+  .nm{font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--text-faint);margin-top:7px;text-align:center}
+  .sep{width:1px;align-self:stretch;background:var(--border);margin:0 4px}
+</style></head>
+<body>
+  <div class="row">
+    <div><div class="box" style="border-radius:var(--radius-sm)"></div><div class="nm">sm · 6</div></div>
+    <div><div class="box" style="border-radius:var(--radius-md)"></div><div class="nm">md · 9</div></div>
+    <div><div class="box" style="border-radius:var(--radius-lg)"></div><div class="nm">lg · 11</div></div>
+    <div><div class="box" style="border-radius:var(--radius-xl)"></div><div class="nm">xl · 13</div></div>
+    <div><div class="box" style="border-radius:var(--radius-pill);width:84px"></div><div class="nm">pill · 18</div></div>
+    <div class="sep"></div>
+    <div><div class="box" style="border-radius:var(--radius-xl);box-shadow:var(--shadow-lift)"></div><div class="nm">shadow-lift</div></div>
+    <div><div class="box" style="border-radius:var(--radius-xl);box-shadow:var(--shadow-pop)"></div><div class="nm">shadow-pop</div></div>
+    <div><div class="box" style="border-radius:var(--radius-md);background:var(--grad-pitch);border:none;box-shadow:var(--shadow-accent)"></div><div class="nm">accent glow</div></div>
+  </div>
+</body></html>

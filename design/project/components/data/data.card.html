@@ -1,0 +1,64 @@
+<!-- @dsCard group="Components" viewport="700x400" name="Data — Stats, Ratings, Forecasts" subtitle="Stat cards, rating rings, factor & probability bars" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-family: var(--font-ui);
+    background-image: var(--grad-app); padding: 20px; }
+  .statgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .ringwrap { display: flex; align-items: center; gap: 16px; background: var(--surface-panel);
+    border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 14px 16px; }
+  .lbl { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: var(--tracking-label);
+    color: var(--text-faint); font-weight: var(--fw-bold); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { StatCard, RatingRing, FactorBar, ProbabilityBar, FormPills, BarMeter } = window.WC26VisualizerDesignSystem_b4eaf5;
+  function Demo() {
+    return (
+      <div>
+        <div className="statgrid">
+          <StatCard label="FIFA World Rank" value="#6" />
+          <StatCard label="Ranking Points" value="1763" />
+          <StatCard label="Group Record" value="2-1-0" unit=" W-D-L" />
+          <StatCard label="Goals" value="7" unit=":1" />
+        </div>
+        <div className="two">
+          <div>
+            <div className="lbl">Rating ring + factor breakdown</div>
+            <div className="ringwrap">
+              <RatingRing value={69} />
+              <div style={{flex: 1}}>
+                <FactorBar label="FIFA base" z={1.42} />
+                <FactorBar label="Form" z={0.31} />
+                <FactorBar label="Attack" z={0.88} />
+                <FactorBar label="Defense" z={-0.24} />
+              </div>
+            </div>
+          </div>
+          <div>
+            <div className="lbl">Match forecast + form</div>
+            <ProbabilityBar home={54} draw={26} away={20} homeLabel="BRA win" awayLabel="MAR win" />
+            <div style={{marginTop: 14, display:'flex', alignItems:'center', gap: 12}}>
+              <FormPills results="WWDLW" />
+              <BarMeter value={18.4} max={28} style={{flex:1}} />
+              <span style={{fontFamily:'var(--font-mono)', fontWeight:800, color:'var(--accent)'}}>18.4%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script>
+</body>
+</html>

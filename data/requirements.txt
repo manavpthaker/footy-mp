@@ -1,0 +1,8 @@
+# footy-mp Python ETL + model
+soccerdata>=1.8        # FBref / Understat xG + shot data (free, cached, rate-limited)
+pandas>=2.0
+numpy>=1.26
+scipy>=1.11            # model fitting (Dixon-Coles MLE upgrade)
+requests>=2.31         # ESPN ingest in the GitHub Action
+supabase>=2.4          # write ratings/predictions/matches back to Postgres
+python-dotenv>=1.0

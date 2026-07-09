@@ -1,0 +1,30 @@
+<!-- @dsCard group="Brand" viewport="700x150" name="Qualification rail in use" subtitle="The signature 3px status rail on standings rows" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="../styles.css">
+<style>
+  body{margin:0;background:var(--bg-app);background-image:var(--grad-app);font-family:var(--font-ui);padding:16px;color:var(--text-primary)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:var(--fs-xs);color:var(--text-muted);margin-bottom:11px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dot{width:9px;height:9px;border-radius:3px}
+  .card{background:var(--surface-panel);border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden;max-width:380px}
+  .rw{display:flex;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid var(--border-soft);font-weight:var(--fw-semibold);font-size:var(--fs-sm)}
+  .rw:first-child{border-top:none}
+  .pos{font-family:var(--font-mono);color:var(--text-faint);font-size:var(--fs-2xs);width:12px}
+  .pts{margin-left:auto;font-family:var(--font-mono);font-weight:var(--fw-extrabold)}
+  .q{font-size:var(--fs-micro);padding:1px 5px;border-radius:var(--radius-xs);font-weight:var(--fw-bold);background:var(--pitch-tint);color:var(--accent)}
+  .out{font-size:var(--fs-micro);padding:1px 5px;border-radius:var(--radius-xs);font-weight:var(--fw-bold);background:var(--red-tint);color:var(--status-out)}
+</style></head>
+<body>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--status-through)"></i>1st — through</span>
+    <span><i class="dot" style="background:var(--status-runner)"></i>2nd — through</span>
+    <span><i class="dot" style="background:var(--status-playoff)"></i>3rd — playoff hunt</span>
+    <span><i class="dot" style="background:var(--status-out)"></i>eliminated</span>
+  </div>
+  <div class="card">
+    <div class="rw" style="box-shadow:inset 3px 0 0 var(--status-through)"><span class="pos">1</span>🇲🇽 Mexico <span class="q">Q</span><span class="pts">9</span></div>
+    <div class="rw" style="box-shadow:inset 3px 0 0 var(--status-runner)"><span class="pos">2</span>🇿🇦 South Africa <span class="q">Q</span><span class="pts">4</span></div>
+    <div class="rw" style="box-shadow:inset 3px 0 0 var(--status-playoff)"><span class="pos">3</span>🇰🇷 South Korea<span class="pts">3</span></div>
+    <div class="rw" style="box-shadow:inset 3px 0 0 var(--status-out);opacity:.62"><span class="pos">4</span>🇨🇿 Czech Rep. <span class="out">OUT</span><span class="pts">1</span></div>
+  </div>
+</body></html>

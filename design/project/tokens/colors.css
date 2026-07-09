@@ -1,0 +1,127 @@
+/* ============================================================
+   Footy MP (MPFC) — Color tokens · "Quant Desk"
+   A warm charcoal terminal with an ember-orange primary, a
+   steel-cyan secondary, and tape gold for the follow layer.
+   Status colors still carry the meaning: through / runner /
+   playoff / out, and league zones at season scale.
+   ============================================================ */
+
+:root {
+  /* ---- Base ramp: warm charcoal surfaces (dark → raised) ---- */
+  --coal-950: #0e0c0b; /* deepest well / behind app */
+  --coal-900: #131110; /* app background */
+  --coal-850: #171412; /* sunken / header base */
+  --coal-800: #1a1715; /* panel / card */
+  --coal-750: #1d1917; /* tinted panel */
+  --coal-700: #211c19; /* raised panel / control surface */
+  --coal-650: #262019; /* hover surface */
+  --coal-600: #2e2722; /* track / inactive bar */
+
+  /* ---- Lines ---- */
+  --line-strong: #2e2722; /* primary borders */
+  --line-soft:   #262019; /* row dividers, inner hairlines */
+
+  /* ---- Ink ramp: text on charcoal ---- */
+  --ink-50:  #fff9f0;
+  --ink-100: #e9e2d8; /* primary text */
+  --ink-300: #a99a87; /* muted / secondary */
+  --ink-500: #8a7d6d; /* faint / captions, axis labels */
+  --ink-700: #6d5f4f40; /* axis tick (low alpha) */
+
+  /* ---- Ember orange (primary accent) ---- */
+  --ember-400: #ffb45c;
+  --ember-500: #ff9d2e; /* primary accent */
+  --ember-600: #e07f12;
+  --ember-700: #c9700f;
+  --ember-900: #2b1a05; /* ink ON ember fills */
+  --ember-tint:#33230f; /* qualified chip bg */
+
+  /* ---- Steel cyan (secondary accent) ---- */
+  --steel-400: #7fd4e8;
+  --steel-500: #4fc1dd; /* secondary accent / runner-up */
+  --steel-600: #2f97b3;
+  --steel-900: #062a33; /* ink ON steel fills */
+
+  /* ---- Tape gold ---- */
+  --gold-400: #ffd97a;
+  --gold-500: #ffce53; /* champion / follow layer */
+  --gold-600: #dba627;
+  --gold-900: #332200; /* ink ON gold fills */
+
+  /* ---- Signal: red / amber ---- */
+  --red-500:  #ff5d3a; /* eliminated / loss / live */
+  --red-600:  #d8452a;
+  --red-tint: #331410; /* eliminated chip bg */
+  --amber-500:#ffb13d; /* playoff hunt / warning / "as of" */
+
+  /* ---- Draw / neutral chip ---- */
+  --slate-500:#6b5f52; /* draw pill */
+  --slate-300:#d6cabb;
+
+  /* ================= SEMANTIC ALIASES ================= */
+  /* Surfaces */
+  --bg-app:        var(--coal-900);
+  --bg-sunken:     var(--coal-850);
+  --surface-panel: var(--coal-800);
+  --surface-tint:  var(--coal-750);
+  --surface-raised:var(--coal-700);
+  --surface-hover: var(--coal-650);
+  --track:         var(--coal-600);
+
+  /* Borders */
+  --border:        var(--line-strong);
+  --border-soft:   var(--line-soft);
+
+  /* Text */
+  --text-primary:  var(--ink-100);
+  --text-muted:    var(--ink-300);
+  --text-faint:    var(--ink-500);
+  --text-on-pitch: var(--ember-900);
+  --text-on-sky:   var(--steel-900);
+  --text-on-gold:  var(--gold-900);
+
+  /* Accents */
+  --accent:        var(--ember-500);
+  --accent-strong: var(--ember-700);
+  --accent-2:      var(--steel-500);
+  --gold:          var(--gold-500);
+
+  /* Legacy ramp aliases (WC26 names → Quant Desk values) */
+  --pitch-400: var(--ember-400);
+  --pitch-500: var(--ember-500);
+  --pitch-600: var(--ember-600);
+  --pitch-700: var(--ember-700);
+  --pitch-900: var(--ember-900);
+  --pitch-tint: var(--ember-tint);
+  --sky-400: var(--steel-400);
+  --sky-500: var(--steel-500);
+  --sky-600: var(--steel-600);
+  --sky-900: var(--steel-900);
+
+  /* Tournament status (the meaning layer) */
+  --status-through:  var(--ember-500); /* 1st — qualified */
+  --status-runner:   var(--steel-500); /* 2nd — through */
+  --status-playoff:  var(--amber-500); /* 3rd — playoff hunt */
+  --status-out:      var(--red-500);   /* eliminated */
+  --status-win:      var(--ember-500);
+  --status-draw:     var(--slate-500);
+  --status-loss:     var(--red-500);
+  --status-live:     var(--red-500);
+
+  /* League zone semantics (multi-league layer) */
+  --zone-ucl:    var(--ember-500);  /* Champions League places */
+  --zone-uel:    var(--steel-500);  /* Europa / continental secondary */
+  --zone-conf:   var(--amber-500);  /* Conference / playoff places */
+  --zone-releg:  var(--red-500);    /* relegation */
+
+  /* Following (personalization layer) */
+  --follow:      var(--gold-500);
+  --follow-tint: rgba(255, 206, 83, 0.12);
+
+  /* Result gradients (fills) */
+  --grad-pitch:  linear-gradient(135deg, var(--ember-500), var(--ember-700));
+  --grad-sky:    linear-gradient(135deg, var(--steel-500), var(--steel-600));
+  --grad-gold:   linear-gradient(135deg, var(--gold-500), var(--gold-600));
+  --grad-header: linear-gradient(90deg, #181514, #1c1815); /* @kind color */
+  --grad-app:    radial-gradient(1200px 700px at 80% -10%, #241d15 0%, var(--coal-900) 55%);
+}

@@ -1,0 +1,111 @@
+# Claude Code build prompt — footy-mp
+
+Paste everything below into Claude Code, run from the repo root (`footy-mp/`).
+
+---
+
+You are building out **footy-mp**, a year-round football tracker + xG prediction engine.
+The foundation already exists — read `ARCHITECTURE.md` first; it is the source of truth for
+stack, schema, data sources, and the model plan. Do not re-architect it.
+
+## What already exists (use it, don't rebuild)
+- `ARCHITECTURE.md` — full design + milestones.
+- `data/db/schema.sql` — Supabase Postgres schema. **Already applied to the live Supabase project.**
+- `data/ingest/espn.py` — working ESPN client (fixtures/results/live/shootouts). Verified.
+- `data/ingest/stats.py` — FBref/Understat xG client via `soccerdata`.
+- `data/model/engine.py` — xG Dixon-Coles model: `fit_ratings`, `predict`, `knockout`, `backtest`.
+  Verified end-to-end. `KO_TEMPER`/`PEN_FACTOR` still hold WC26 priors — re-fit them (Phase 2).
+- `data/requirements.txt`, `.github/workflows/ingest.yml`.
+
+## Environment
+- Supabase project is live and `schema.sql` is applied. Use env vars `SUPABASE_URL` and
+  `SUPABASE_SERVICE_KEY` (server-side) and `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (client).
+- Free data only. No paid APIs. Retrieve web data only via `soccerdata` or standard HTTP to the
+  ESPN public API — never scrape around blocks.
+
+## Design system (source of truth for all UI) — "Quant Desk"
+A complete Claude Design handoff lives in **`design/`** (read `design/README.md` first). It is the
+authoritative visual system — a dark warm-charcoal *terminal* aesthetic called **Quant Desk**, NOT a
+light theme. Build the UI to match it exactly; do not invent styling.
+
+- **Global CSS entry:** `design/project/styles.css` (imports `tokens/fonts.css`, `colors.css`,
+  `typography.css`, `spacing.css`). Wire this into the Next.js root layout (or port the tokens into
+  the Tailwind config / a global stylesheet). Use the CSS variables — never hardcode hex.
+- **Look:** warm charcoal surfaces (`--bg-app` #131110, `--surface-panel` #1a1715), ember-orange
+  primary (`--accent` #ff9d2e), steel-cyan secondary (`--accent-2` #4fc1dd), **tape-gold for the
+  follow layer** (`--follow` #ffce53 — gold ★ = followed, never green). One typeface everywhere:
+  **Spline Sans Mono** (the terminal identity; hierarchy via weight/case/color). Tabular figures for data.
+- **Semantic tokens carry meaning — use them:** `--status-through/runner/playoff/out`,
+  `--zone-ucl/uel/conf/releg` (league-table zones), `--status-win/draw/loss/live`, `--follow`.
+- **Components are pre-built React** in `design/project/components/{core,football,data}/`. Each ships
+  as `.jsx` (implementation), `.d.ts` (TypeScript props), and `.prompt.md` (usage examples + rules).
+  **Adopt them directly into `web/`** (target is React) — copy in, wire to real data, keep the API in
+  the `.d.ts`. Inventory:
+  - core: `Button`, `IconButton`, `Tag`, `SectionHeading`, `FollowButton`
+  - football: `MatchRow`, `FixtureGroup`, `LeagueTable`, `GroupStandings`, `PlayerCard`,
+    `PlayerStatRow`, `CompetitionBadge`
+  - data (model outputs): `StatCard`, `ProbabilityBar`, `ScorelineGrid`, `RatingRing`, `FactorBar`,
+    `FormPills`, `BarMeter`
+- **Assembled reference:** `design/project/ui_kits/visualizer/` (`app.jsx`, `match.jsx`, `bracket.jsx`,
+  `model.js`, `data.js`, `kit.jsx`) shows how the components compose into full views — use it as the
+  layout blueprint. Style guide + screenshots: `design/project/guidelines/*.card.html` and
+  `design/project/reference/` (`team-detail.png`, `bracket.png`). Read the source directly; don't
+  render/screenshot unless asked.
+- The football `data/` components map 1:1 to our model outputs — wire `ProbabilityBar` to
+  `predictions.p_home/draw/away`, `ScorelineGrid` to the DC matrix, `RatingRing` to `model_ratings`,
+  `FactorBar` to the strength factors, `FollowButton` to the `follows` table.
+
+## Seed follow list (make it editable in the DB via the `follows` table)
+Players: Luis Díaz, James Rodríguez, Juan Fernando Quintero, Richard Ríos, Jhon Lucumí.
+Teams: Colombia (NT), Bayern Munich, plus each seeded player's club.
+Leagues: Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League.
+Countries: Colombia. (Confirm/extend with the user if they add names.)
+
+---
+
+## Phase 1 — Data pipeline (M1)
+1. Build `data/pipeline.py` (the orchestrator referenced by the GitHub Action): 
+   ESPN fixtures/results → Understat xG → upsert into Supabase (`matches`, `team_match_stats`,
+   `player_match_stats`, `teams`, `players`, `leagues`, `countries`). Idempotent upserts keyed on
+   `espn_event_id` and natural keys. Add a `data/db.py` Supabase helper.
+2. Entity resolution: ESPN and Understat/FBref use different team/player name spellings. Build a
+   normalization/alias map so the same team joins across sources. Store `espn_id`/`fbref_id`.
+3. Backfill: last 3–4 completed seasons of Understat xG for the big-5 leagues + current season.
+   Then wire incremental daily pulls.
+4. Seed the `follows` table with the list above.
+
+## Phase 2 — Model v1 + prove it (M2) — do this BEFORE the UI
+1. `data/model/pipeline.py`: read `team_match_stats` from Supabase, call `engine.fit_ratings`,
+   write `model_ratings`; generate `predictions` for upcoming fixtures; write to Supabase.
+2. Re-fit `KO_TEMPER` and `PEN_FACTOR` from the real dataset (shootout + knockout records),
+   replacing the WC26 priors, using the same shrinkage approach documented in the code comments.
+3. **Backtest gate (required):** run `engine.backtest` walk-forward on the backfilled data and
+   compare against a FIFA/goal-proxy baseline that mimics WC26. Print and store (`backtest_runs`)
+   RPS, log-loss, Brier for both. **The xG model must beat the baseline on RPS and log-loss.**
+   If it doesn't, tune (recency half-life, DC rho, shrinkage) until it does, and report the numbers.
+   Do not proceed to Phase 3 until this passes.
+
+## Phase 3 — Next.js app (M3)
+Create `web/` — Next.js 14 App Router, TypeScript, deploy target Vercel.
+1. `lib/supabase.ts` server + client helpers. Read models/matches from Supabase.
+2. Pages:
+   - `/` dashboard: everything the user follows — next fixtures, latest results, form, and each
+     upcoming match's model prediction (p_home/draw/away, xG, and for knockouts the advance/ET/pens).
+   - `/players/[id]`, `/teams/[id]`, `/leagues/[id]` (table + fixtures + xG), `/countries/[id]`.
+   - Follow/unfollow buttons writing to `follows`.
+3. API route handlers over Supabase for follows + reads.
+4. **Style strictly from the Quant Desk design handoff in `design/`** (see the Design system section
+   above) — it is the source of truth. Wire `design/project/styles.css` into the app, adopt the
+   pre-built React components from `design/project/components/`, and compose views to match
+   `design/project/ui_kits/visualizer/`. Metrics are the hero: lead with numbers, tabular figures,
+   gold ★ for followed entities. Use the CSS variables/semantic tokens, never hardcode colors.
+5. A live-match view that reuses the WC "lowdown" analytical voice for followed games in progress.
+
+## Constraints & definition of done
+- Every model change is validated by the backtest; never ship a model that loses to the baseline.
+- Idempotent, re-runnable ingest; the GitHub Action runs green.
+- `npm run build` passes; the dashboard renders the seeded follows with real fixtures + predictions.
+- Keep secrets in env vars; never commit keys.
+
+Work phase by phase. After each phase, run the smoke tests / backtest, report results, and commit.
+Start with Phase 1.

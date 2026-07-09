@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="design_doc_mode" content="canvas">
+<title>MPFC — Dark Theme Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Serif&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; font-family: 'Barlow', sans-serif; }
+  a { color: inherit; } a:hover { color: inherit; }
+  .frame { position: absolute; top: 40px; width: 440px; border-radius: 16px; overflow: hidden; }
+  .badge { position: absolute; top: 8px; font: 700 12px/1 'IBM Plex Mono', monospace; color: #667; }
+  .pad { padding: 20px; }
+  .mrow { display: flex; align-items: center; gap: 10px; }
+
+  /* ============ 1a — BLACKOUT / VOLT ============ */
+  .t-volt { background: #0b0d0a; color: #eef2e6; }
+  .t-volt .hdr { display:flex; align-items:baseline; justify-content:space-between; padding: 18px 20px 10px; border-bottom: 1px solid #1d221a; }
+  .t-volt .logo { font: 800 26px/1 'Barlow Condensed'; letter-spacing: 0.04em; text-transform: uppercase; }
+  .t-volt .logo b { color: #c8f31d; }
+  .t-volt .eyebrow { font: 600 10px/1 'IBM Plex Mono'; letter-spacing: 0.18em; text-transform: uppercase; color: #6c7562; margin: 16px 0 8px; }
+  .t-volt .card { background: #121510; border: 1px solid #23281e; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+  .t-volt .team { font: 700 17px/1.2 'Barlow Condensed'; letter-spacing: 0.03em; text-transform: uppercase; }
+  .t-volt .score { font: 700 17px/1 'IBM Plex Mono'; color: #c8f31d; margin-left: auto; }
+  .t-volt .live { font: 700 10px/1 'IBM Plex Mono'; color: #0b0d0a; background: #c8f31d; padding: 3px 6px; border-radius: 3px; }
+  .t-volt table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .t-volt th { font: 600 9px/1 'IBM Plex Mono'; letter-spacing: 0.12em; color: #6c7562; text-transform: uppercase; text-align: right; padding: 6px 4px; }
+  .t-volt th:first-child { text-align: left; }
+  .t-volt td { padding: 8px 4px; border-top: 1px solid #1d221a; text-align: right; font: 500 13px/1 'IBM Plex Mono'; }
+  .t-volt td:first-child { text-align: left; font: 600 14px/1.1 'Barlow Condensed'; letter-spacing: 0.03em; text-transform: uppercase; }
+  .t-volt .z { display: inline-block; width: 3px; height: 12px; border-radius: 2px; margin-right: 8px; vertical-align: -2px; }
+  .t-volt .prob { display: flex; height: 30px; border-radius: 6px; overflow: hidden; font: 700 11px/30px 'IBM Plex Mono'; text-align: center; }
+  .t-volt .foot { font: 500 10px/1.5 'IBM Plex Mono'; color: #6c7562; margin-top: 10px; }
+
+  /* ============ 1b — QUANT DESK / EMBER ============ */
+  .t-ember { background: #131110; color: #e9e2d8; font-family: 'Spline Sans Mono', monospace; }
+  .t-ember .hdr { display:flex; align-items:center; justify-content:space-between; padding: 16px 20px; background: #181514; border-bottom: 2px solid #2a2320; }
+  .t-ember .logo { font: 700 18px/1 'Spline Sans Mono'; letter-spacing: 0.06em; }
+  .t-ember .logo b { color: #ff9d2e; }
+  .t-ember .tick { font: 500 10px/1 'Spline Sans Mono'; color: #8a7d6d; }
+  .t-ember .eyebrow { font: 600 10px/1 'Spline Sans Mono'; letter-spacing: 0.16em; text-transform: uppercase; color: #8a7d6d; margin: 16px 0 8px; }
+  .t-ember .card { background: #1a1715; border: 1px solid #2e2722; border-radius: 4px; padding: 11px 13px; margin-bottom: 7px; }
+  .t-ember .team { font: 600 14px/1.2 'Spline Sans Mono'; }
+  .t-ember .score { font: 700 15px/1 'Spline Sans Mono'; color: #ff9d2e; margin-left: auto; }
+  .t-ember .live { font: 700 9px/1 'Spline Sans Mono'; color: #ff5d3a; border: 1px solid #ff5d3a; padding: 3px 5px; border-radius: 2px; }
+  .t-ember table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .t-ember th { font: 600 9px/1 'Spline Sans Mono'; letter-spacing: 0.1em; color: #8a7d6d; text-transform: uppercase; text-align: right; padding: 6px 4px; }
+  .t-ember th:first-child { text-align: left; }
+  .t-ember td { padding: 8px 4px; border-top: 1px dashed #2e2722; text-align: right; font: 500 12px/1 'Spline Sans Mono'; }
+  .t-ember td:first-child { text-align: left; font-weight: 600; }
+  .t-ember .z { display: inline-block; width: 8px; font-weight: 700; margin-right: 4px; }
+  .t-ember .prob { display: flex; height: 28px; border-radius: 3px; overflow: hidden; font: 700 10px/28px 'Spline Sans Mono'; text-align: center; }
+  .t-ember .foot { font: 500 10px/1.5 'Spline Sans Mono'; color: #8a7d6d; margin-top: 10px; }
+
+  /* ============ 1c — MIDNIGHT EDITORIAL ============ */
+  .t-edit { background: #16121d; color: #f2ecf7; font-family: 'Space Grotesk', sans-serif; }
+  .t-edit .hdr { padding: 20px 20px 12px; border-bottom: 3px double #372c47; }
+  .t-edit .logo { font: 400 30px/1 'Instrument Serif', serif; }
+  .t-edit .logo b { color: #ff7a59; font-weight: 400; }
+  .t-edit .sub { font: 500 10px/1 'Space Grotesk'; letter-spacing: 0.2em; text-transform: uppercase; color: #8d80a3; margin-top: 6px; }
+  .t-edit .eyebrow { font: 600 10px/1 'Space Grotesk'; letter-spacing: 0.18em; text-transform: uppercase; color: #8d80a3; margin: 16px 0 8px; }
+  .t-edit .card { background: #1d1827; border: 1px solid #33294a; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  .t-edit .team { font: 400 19px/1.1 'Instrument Serif', serif; }
+  .t-edit .score { font: 600 16px/1 'Space Grotesk'; color: #ff7a59; margin-left: auto; font-variant-numeric: tabular-nums; }
+  .t-edit .live { font: 700 9px/1 'Space Grotesk'; letter-spacing: 0.1em; color: #16121d; background: #ff7a59; padding: 3px 7px; border-radius: 99px; }
+  .t-edit table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .t-edit th { font: 600 9px/1 'Space Grotesk'; letter-spacing: 0.14em; color: #8d80a3; text-transform: uppercase; text-align: right; padding: 6px 4px; }
+  .t-edit th:first-child { text-align: left; }
+  .t-edit td { padding: 8px 4px; border-top: 1px solid #2a2138; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .t-edit td:first-child { text-align: left; font: 400 16px/1.1 'Instrument Serif', serif; }
+  .t-edit .z { display: inline-block; width: 3px; height: 13px; border-radius: 2px; margin-right: 8px; vertical-align: -2px; }
+  .t-edit .prob { display: flex; height: 30px; border-radius: 99px; overflow: hidden; font: 600 11px/30px 'Space Grotesk'; text-align: center; }
+  .t-edit .foot { font: 400 11px/1.5 'Space Grotesk'; color: #8d80a3; margin-top: 10px; font-style: italic; }
+</style>
+</head>
+<body>
+
+<section id="1a" style="position: absolute; left: 40px; top: 0; width: 440px; height: 700px;">
+  <span class="badge" style="left: 0;"><a href="#1a" style="text-decoration:none;">1a — BLACKOUT VOLT · stadium LED, condensed athletic</a></span>
+  <div class="frame t-volt">
+    <div class="hdr">
+      <div class="logo">MP<b>FC</b></div>
+      <div style="font: 600 10px/1 'IBM Plex Mono'; letter-spacing: 0.14em; color: #6c7562;">TUE JUL 7 · 5 LIVE</div>
+    </div>
+    <div class="pad">
+      <div class="eyebrow">Following · Live</div>
+      <div class="card mrow">
+        <span class="live">LIVE 64′</span>
+        <span class="team">Arsenal — Real Madrid</span>
+        <span class="score">1–1</span>
+      </div>
+      <div class="eyebrow">Premier League · Table</div>
+      <div class="card" style="padding: 6px 12px 10px;">
+        <table>
+          <thead><tr><th>Club</th><th>P</th><th>GD</th><th>PTS</th></tr></thead>
+          <tbody>
+            <tr><td><span class="z" style="background:#c8f31d;"></span>Arsenal ★</td><td>24</td><td>+34</td><td><b>56</b></td></tr>
+            <tr><td><span class="z" style="background:#c8f31d;"></span>Liverpool</td><td>24</td><td>+30</td><td><b>54</b></td></tr>
+            <tr><td><span class="z" style="background:#42c6ff;"></span>Brighton</td><td>24</td><td>+8</td><td><b>38</b></td></tr>
+            <tr><td><span class="z" style="background:#ff4d5e;"></span>Everton</td><td>24</td><td>−18</td><td><b>18</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="eyebrow">Model · ARS v RMA</div>
+      <div class="prob">
+        <div style="width:48%; background:#c8f31d; color:#0b0d0a;">ARS 48%</div>
+        <div style="width:24%; background:#23281e; color:#9aa48c;">24%</div>
+        <div style="width:28%; background:#3a4132; color:#d6e0c4;">RMA 28%</div>
+      </div>
+      <div class="foot">COMPOSITE 74/99 · POISSON xG 1.7 : 1.1 · BACKTESTED QATAR 22</div>
+    </div>
+  </div>
+</section>
+
+<section id="1b" style="position: absolute; left: 540px; top: 0; width: 440px; height: 700px;">
+  <span class="badge" style="left: 0;"><a href="#1b" style="text-decoration:none;">1b — QUANT DESK · terminal ember, mono-first</a></span>
+  <div class="frame t-ember">
+    <div class="hdr">
+      <div class="logo">MP<b>FC_</b></div>
+      <div class="tick">JUL 07 21:42:11 UTC</div>
+    </div>
+    <div class="pad">
+      <div class="eyebrow">&gt; following/live</div>
+      <div class="card mrow">
+        <span class="live">● 64'</span>
+        <span class="team">ARS–RMA</span>
+        <span class="score">1:1</span>
+      </div>
+      <div class="eyebrow">&gt; epl/table</div>
+      <div class="card" style="padding: 6px 12px 10px;">
+        <table>
+          <thead><tr><th>Club</th><th>P</th><th>GD</th><th>PTS</th></tr></thead>
+          <tbody>
+            <tr><td><span class="z" style="color:#ffce53;">*</span>ARSENAL</td><td>24</td><td>+34</td><td><b>56</b></td></tr>
+            <tr><td><span class="z" style="color:#ff9d2e;">▲</span>LIVERPOOL</td><td>24</td><td>+30</td><td><b>54</b></td></tr>
+            <tr><td><span class="z" style="color:#8a7d6d;">·</span>BRIGHTON</td><td>24</td><td>+8</td><td><b>38</b></td></tr>
+            <tr><td><span class="z" style="color:#ff5d3a;">▼</span>EVERTON</td><td>24</td><td>-18</td><td><b>18</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="eyebrow">&gt; model/ars-rma</div>
+      <div class="prob">
+        <div style="width:48%; background:#ff9d2e; color:#131110;">ARS .48</div>
+        <div style="width:24%; background:#2e2722; color:#8a7d6d;">.24</div>
+        <div style="width:28%; background:#4a3d2c; color:#e9e2d8;">RMA .28</div>
+      </div>
+      <div class="foot">composite=74/99 poisson_xg=[1.7,1.1] backtest=qatar22</div>
+    </div>
+  </div>
+</section>
+
+<section id="1c" style="position: absolute; left: 1040px; top: 0; width: 440px; height: 700px;">
+  <span class="badge" style="left: 0;"><a href="#1c" style="text-decoration:none;">1c — MIDNIGHT EDITORIAL · plum ink, serif headlines</a></span>
+  <div class="frame t-edit">
+    <div class="hdr">
+      <div class="logo">MP<b>FC</b></div>
+      <div class="sub">The football desk · Tuesday 7 July</div>
+    </div>
+    <div class="pad">
+      <div class="eyebrow">Following · Live</div>
+      <div class="card mrow">
+        <span class="live">LIVE 64′</span>
+        <span class="team">Arsenal v Real Madrid</span>
+        <span class="score">1–1</span>
+      </div>
+      <div class="eyebrow">Premier League</div>
+      <div class="card" style="padding: 6px 12px 10px;">
+        <table>
+          <thead><tr><th>Club</th><th>P</th><th>GD</th><th>Pts</th></tr></thead>
+          <tbody>
+            <tr><td><span class="z" style="background:#ff7a59;"></span>Arsenal ★</td><td>24</td><td>+34</td><td><b>56</b></td></tr>
+            <tr><td><span class="z" style="background:#ff7a59;"></span>Liverpool</td><td>24</td><td>+30</td><td><b>54</b></td></tr>
+            <tr><td><span class="z" style="background:#8d80a3;"></span>Brighton</td><td>24</td><td>+8</td><td><b>38</b></td></tr>
+            <tr><td><span class="z" style="background:#b3455a;"></span>Everton</td><td>24</td><td>−18</td><td><b>18</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="eyebrow">The model's view</div>
+      <div class="prob">
+        <div style="width:48%; background:#ff7a59; color:#16121d;">Arsenal 48%</div>
+        <div style="width:24%; background:#2a2138; color:#8d80a3;">24%</div>
+        <div style="width:28%; background:#453a5c; color:#f2ecf7;">Madrid 28%</div>
+      </div>
+      <div class="foot">Composite strength 74 of 99; a Poisson on expected goals, 1.7 to 1.1. Backtested on Qatar 2022.</div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

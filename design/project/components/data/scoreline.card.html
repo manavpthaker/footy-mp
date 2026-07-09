@@ -1,0 +1,40 @@
+<!-- @dsCard group="Components" viewport="420x430" name="Prediction — Scoreline Matrix" subtitle="Poisson scoreline distribution with modal score highlight" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-family: var(--font-ui);
+    background-image: var(--grad-app); padding: 20px; display: grid; place-items: start center; }
+  .panel { background: var(--surface-panel); border: 1px solid var(--border); border-radius: var(--radius-xl);
+    padding: 14px; width: 340px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { ScorelineGrid, ProbabilityBar } = window.WC26VisualizerDesignSystem_b4eaf5;
+
+  // Poisson P(k; λ)
+  const pois = (k, l) => Math.exp(-l) * Math.pow(l, k) / [1,1,2,6,24][k];
+  const matrix = Array.from({length:5}, (_, h) => Array.from({length:5}, (_, a) => pois(h,1.7) * pois(a,1.1)));
+
+  function Demo() {
+    return (
+      <div className="panel">
+        <div style={{fontSize:'var(--fs-2xs)',textTransform:'uppercase',letterSpacing:'var(--tracking-label)',
+          color:'var(--text-faint)',fontWeight:'var(--fw-bold)',marginBottom:10}}>Scoreline distribution — ARS v RMA</div>
+        <ProbabilityBar home={48} draw={24} away={28} homeLabel="ARS" awayLabel="RMA" style={{marginBottom:12}} />
+        <ScorelineGrid home="ARS" away="RMA" matrix={matrix} />
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script>
+</body>
+</html>

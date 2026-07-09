@@ -1,0 +1,45 @@
+<!-- @dsCard group="Colors" viewport="700x160" name="Accents — pitch, sky, gold" subtitle="The three brand accents and their gradients" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="../styles.css">
+<style>
+  body{margin:0;background:var(--bg-app);background-image:var(--grad-app);font-family:var(--font-ui);padding:16px}
+  .row{display:flex;gap:12px}
+  .col{flex:1}
+  .grad{height:50px;border-radius:var(--radius-lg);display:flex;align-items:flex-end;padding:7px 10px;color:#06140d;font-weight:var(--fw-extrabold);font-size:var(--fs-xs)}
+  .ramp{display:flex;gap:4px;margin-top:7px}
+  .dot{flex:1;height:20px;border-radius:var(--radius-sm)}
+  .nm{font-size:var(--fs-xs);font-weight:var(--fw-bold);color:var(--text-primary);margin-top:8px}
+  .hex{font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--text-faint)}
+</style></head>
+<body>
+  <div class="row">
+    <div class="col">
+      <div class="grad" style="background:var(--grad-pitch)">PITCH GREEN</div>
+      <div class="ramp">
+        <div class="dot" style="background:var(--pitch-400)"></div>
+        <div class="dot" style="background:var(--pitch-500)"></div>
+        <div class="dot" style="background:var(--pitch-600)"></div>
+        <div class="dot" style="background:var(--pitch-700)"></div>
+      </div>
+      <div class="nm">--accent · pitch-500</div><div class="hex">#3ddc97 — primary</div>
+    </div>
+    <div class="col">
+      <div class="grad" style="background:var(--grad-sky);color:var(--sky-900)">SKY BLUE</div>
+      <div class="ramp">
+        <div class="dot" style="background:var(--sky-400)"></div>
+        <div class="dot" style="background:var(--sky-500)"></div>
+        <div class="dot" style="background:var(--sky-600)"></div>
+      </div>
+      <div class="nm">--accent-2 · sky-500</div><div class="hex">#28b6ff — secondary</div>
+    </div>
+    <div class="col">
+      <div class="grad" style="background:var(--grad-gold);color:var(--gold-900)">TROPHY GOLD</div>
+      <div class="ramp">
+        <div class="dot" style="background:var(--gold-400)"></div>
+        <div class="dot" style="background:var(--gold-500)"></div>
+        <div class="dot" style="background:var(--gold-600)"></div>
+      </div>
+      <div class="nm">--gold · gold-500</div><div class="hex">#ffd24a — champion</div>
+    </div>
+  </div>
+</body></html>

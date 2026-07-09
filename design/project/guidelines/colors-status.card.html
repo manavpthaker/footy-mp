@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Status semantics" subtitle="The meaning layer — qualification, results, live" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="../styles.css">
+<style>
+  body{margin:0;background:var(--bg-app);background-image:var(--grad-app);font-family:var(--font-ui);padding:16px}
+  .row{display:flex;gap:9px;flex-wrap:wrap}
+  .sw{display:flex;align-items:center;gap:8px;background:var(--surface-panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:9px 11px;flex:1;min-width:150px}
+  .rail{width:6px;height:30px;border-radius:3px;flex:0 0 auto}
+  .nm{font-size:var(--fs-xs);font-weight:var(--fw-bold);color:var(--text-primary)}
+  .desc{font-size:var(--fs-micro);color:var(--text-faint);margin-top:1px}
+</style></head>
+<body>
+  <div class="row" style="margin-bottom:9px">
+    <div class="sw"><div class="rail" style="background:var(--status-through)"></div><div><div class="nm">through · 1st</div><div class="desc">--status-through · pitch</div></div></div>
+    <div class="sw"><div class="rail" style="background:var(--status-runner)"></div><div><div class="nm">runner-up · 2nd</div><div class="desc">--status-runner · sky</div></div></div>
+    <div class="sw"><div class="rail" style="background:var(--status-playoff)"></div><div><div class="nm">playoff · 3rd</div><div class="desc">--status-playoff · amber</div></div></div>
+    <div class="sw"><div class="rail" style="background:var(--status-out)"></div><div><div class="nm">eliminated</div><div class="desc">--status-out · red</div></div></div>
+  </div>
+  <div class="row">
+    <div class="sw"><div class="rail" style="background:var(--status-win)"></div><div><div class="nm">win</div><div class="desc">--status-win · pitch</div></div></div>
+    <div class="sw"><div class="rail" style="background:var(--status-draw)"></div><div><div class="nm">draw</div><div class="desc">--status-draw · slate</div></div></div>
+    <div class="sw"><div class="rail" style="background:var(--status-loss)"></div><div><div class="nm">loss</div><div class="desc">--status-loss · red</div></div></div>
+    <div class="sw"><div class="rail" style="background:var(--status-live)"></div><div><div class="nm">live ●</div><div class="desc">--status-live · red, pulses</div></div></div>
+  </div>
+</body></html>

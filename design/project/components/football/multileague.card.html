@@ -1,0 +1,80 @@
+<!-- @dsCard group="Components" viewport="740x560" name="Multi-league — Table, Fixtures, Players" subtitle="LeagueTable zones, FixtureGroup, PlayerStatRow, CompetitionBadge, FollowButton" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-family: var(--font-ui);
+    background-image: var(--grad-app); padding: 20px; }
+  .grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; align-items: start; }
+  .lbl { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: var(--tracking-label);
+    color: var(--text-faint); font-weight: var(--fw-bold); margin-bottom: 8px; }
+  .legend { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { LeagueTable, FixtureGroup, MatchRow, PlayerStatRow, CompetitionBadge, FollowButton, Tag } =
+    window.WC26VisualizerDesignSystem_b4eaf5;
+
+  const epl = [
+    { team:'Arsenal',    flag:'🔴', P:24, W:17, D:5, L:2,  GD:34,  Pts:56, zone:'ucl',   form:['W','W','D','W','W'], followed:true },
+    { team:'Liverpool',  flag:'🔴', P:24, W:16, D:6, L:2,  GD:30,  Pts:54, zone:'ucl',   form:['W','D','W','W','D'] },
+    { team:'Man City',   flag:'🔵', P:24, W:15, D:5, L:4,  GD:27,  Pts:50, zone:'ucl',   form:['W','W','W','L','W'] },
+    { team:'Newcastle',  flag:'⚫', P:24, W:13, D:6, L:5,  GD:15,  Pts:45, zone:'ucl',   form:['D','W','W','D','W'] },
+    { team:'Brighton',   flag:'🔵', P:24, W:10, D:8, L:6,  GD:8,   Pts:38, zone:'uel',   form:['D','W','L','W','D'] },
+    { team:'Aston Villa',flag:'🟣', P:24, W:10, D:6, L:8,  GD:4,   Pts:36, zone:'conf',  form:['L','W','D','W','L'] },
+    { team:'Chelsea',    flag:'🔵', P:24, W:9,  D:7, L:8,  GD:2,   Pts:34, zone:null,    form:['D','D','W','L','W'] },
+    { team:'Everton',    flag:'🔵', P:24, W:4,  D:6, L:14, GD:-18, Pts:18, zone:'releg', form:['L','L','D','L','L'] },
+  ];
+
+  function Demo() {
+    return (
+      <div className="grid">
+        <div>
+          <div className="lbl" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span>League table</span>
+            <CompetitionBadge code="EPL" name="Premier League" tone="sky" />
+          </div>
+          <LeagueTable rows={epl} onSelect={() => {}} />
+          <div className="legend">
+            <Tag tone="qualified">UCL</Tag>
+            <Tag tone="pill" style={{color:'var(--accent-2)'}}>Europa</Tag>
+            <Tag tone="pill" style={{color:'var(--amber-500)'}}>Conf</Tag>
+            <Tag tone="out">Relegation</Tag>
+          </div>
+        </div>
+        <div>
+          <div className="lbl">Fixtures by group</div>
+          <FixtureGroup label="Live" right={<CompetitionBadge code="UCL" name="Champions League" tone="gold" />}>
+            <MatchRow homeFlag="🔴" home="ARS" awayFlag="⚪" away="RMA"
+              right={<span style={{color:'var(--status-live)',fontWeight:700,fontSize:11}}>● 64′ 1–1</span>} />
+          </FixtureGroup>
+          <FixtureGroup label="Sat Jul 11" right={<CompetitionBadge code="LIB" name="Libertadores" tone="neutral" />}>
+            <MatchRow homeFlag="⚪" home="BOC" awayFlag="🔴" away="FLA"
+              right={<span style={{color:'var(--accent)',fontWeight:700,fontSize:11}}>58% FLA</span>} />
+          </FixtureGroup>
+          <div className="lbl" style={{marginTop:4}}>Player leaderboard</div>
+          <PlayerStatRow rank={1} flag="🇳🇴" name="Erling Haaland" meta="Man City · ST" followed
+            figures={[{value:21,label:'GLS',accent:true},{value:'0.94',label:'xG/90'},{value:33,label:'PROJ'}]} onClick={()=>{}} />
+          <PlayerStatRow rank={2} flag="🇪🇬" name="Mohamed Salah" meta="Liverpool · RW"
+            figures={[{value:18,label:'GLS',accent:true},{value:'0.71',label:'xG/90'},{value:27,label:'PROJ'}]} onClick={()=>{}} />
+          <div style={{display:'flex',gap:8,marginTop:10,alignItems:'center'}}>
+            <FollowButton following onToggle={()=>{}} />
+            <FollowButton onToggle={()=>{}} />
+            <FollowButton following label={false} onToggle={()=>{}} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script>
+</body>
+</html>

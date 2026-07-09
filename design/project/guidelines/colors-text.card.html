@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="700x130" name="Text & lines on navy" subtitle="Ink hierarchy and border weights" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><link rel="stylesheet" href="../styles.css">
+<style>
+  body{margin:0;background:var(--bg-app);background-image:var(--grad-app);font-family:var(--font-ui);padding:18px}
+  .stack > div{margin-bottom:7px}
+  .p{color:var(--text-primary);font-size:18px;font-weight:var(--fw-bold)}
+  .m{color:var(--text-muted);font-size:14px}
+  .f{color:var(--text-faint);font-size:13px}
+  .tag{font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--text-faint)}
+  .lines{display:flex;gap:14px;margin-top:14px}
+  .line{flex:1;background:var(--surface-panel);border-radius:var(--radius-md);padding:10px 12px}
+  .bx{height:18px}
+</style></head>
+<body>
+  <div class="stack">
+    <div class="p">Primary text — Brazil &amp; France headline <span class="tag">--text-primary #e8eefc</span></div>
+    <div class="m">Muted — Group A · Coach Aguirre · 26-man squad <span class="tag">--text-muted #8aa0c8</span></div>
+    <div class="f">Faint — eyebrows, axis labels, FIFA #6 sublines <span class="tag">--text-faint #5d7099</span></div>
+  </div>
+  <div class="lines">
+    <div class="line"><div class="bx" style="border-bottom:1px solid var(--border)"></div><div class="tag">--border · #243450</div></div>
+    <div class="line"><div class="bx" style="border-bottom:1px solid var(--border-soft)"></div><div class="tag">--border-soft · #1b2740</div></div>
+    <div class="line"><div class="bx" style="border-bottom:1px solid var(--track)"></div><div class="tag">--track · #21314d (bar bg)</div></div>
+  </div>
+</body></html>

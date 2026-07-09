@@ -19,11 +19,16 @@ from supabase import Client, create_client
 
 @lru_cache(maxsize=1)
 def client() -> Client:
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    url = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
+    key = (
+        os.environ.get("SUPABASE_SERVICE_KEY")
+        or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or os.environ.get("SUPABASE_SECRET_KEY")  # new-style Supabase secret name
+    )
     if not url or not key:
         raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in the environment."
+            "SUPABASE_URL and a service/secret key (SUPABASE_SERVICE_KEY, "
+            "SUPABASE_SERVICE_ROLE_KEY, or SUPABASE_SECRET_KEY) must be set."
         )
     return create_client(url, key)
 

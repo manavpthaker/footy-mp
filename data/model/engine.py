@@ -33,7 +33,8 @@ PEN_FACTOR = {  # shootout edge beyond strength (keeper + record)
 }
 
 DC_RHO = -0.06      # Dixon-Coles low-score correction (fitted; boosts 0-0/1-1)
-HALF_LIFE_DAYS = 240  # recency weighting for xG ratings
+HALF_LIFE_DAYS = 400  # recency weighting; 2-season backfill favors longer memory
+XG_GOALS_BLEND = 0.55  # weight on xG in the hybrid signal; 1.0 = xG only, 0.0 = goals only
 
 
 # --------------------------------------------------------------------------
@@ -60,8 +61,17 @@ def fit_ratings(matches, as_of: date | None = None, passes: int = 6):
     rows = []
     for m in matches:
         hx = m.get('home_xg'); ax = m.get('away_xg')
-        if hx is None: hx = m.get('home_goals')
-        if ax is None: ax = m.get('away_goals')
+        hg = m.get('home_goals'); ag = m.get('away_goals')
+        # Blend xG with goals when both are present. xG cuts finishing variance;
+        # goals anchor to the outcome scale. Fall back to whichever is available.
+        if hx is not None and hg is not None:
+            hx = XG_GOALS_BLEND * float(hx) + (1 - XG_GOALS_BLEND) * float(hg)
+        elif hx is None:
+            hx = hg
+        if ax is not None and ag is not None:
+            ax = XG_GOALS_BLEND * float(ax) + (1 - XG_GOALS_BLEND) * float(ag)
+        elif ax is None:
+            ax = ag
         if hx is None or ax is None:
             continue
         rows.append((m['home'], m['away'], float(hx), float(ax),
@@ -83,18 +93,18 @@ def fit_ratings(matches, as_of: date | None = None, passes: int = 6):
     defense = {t: 1.0 for t in teams}
 
     for _ in range(passes):
-        # attack_i = weighted avg of (xG_for / (mu * opp_defense * side_factor))
         af_num = defaultdict(float); af_den = defaultdict(float)
         df_num = defaultdict(float); df_den = defaultdict(float)
         for h, a, hx, ax, neutral, w in rows:
             hf = 1.0 if neutral else home_adv
-            # home attacking, away defending
+            # h attacked, produced hx (with home advantage vs a's defense)
             af_num[h] += w * (hx / (mu * defense[a] * hf)); af_den[h] += w
-            df_num[a] += w * (ax_ := ax) / (mu * attack[h])  # away conceded vs home attack
-            df_den[a] += w
-            # away attacking, home defending
-            af_num[a] += w * (ax / (mu * defense[h])); af_den[a] += w
-            df_num[h] += w * (hx / (mu * attack[a] * hf)); df_den[h] += w
+            # a attacked (away), produced ax vs h's defense (no away advantage)
+            af_num[a] += w * (ax / (mu * defense[h]));       af_den[a] += w
+            # a conceded hx from h's attack (with home advantage baked in)
+            df_num[a] += w * (hx / (mu * attack[h] * hf));   df_den[a] += w
+            # h conceded ax from a's attack (no away advantage baked in)
+            df_num[h] += w * (ax / (mu * attack[a]));        df_den[h] += w
         for t in teams:
             if af_den[t]: attack[t] = _shrink(af_num[t] / af_den[t])
             if df_den[t]: defense[t] = _shrink(df_num[t] / df_den[t])
@@ -103,8 +113,10 @@ def fit_ratings(matches, as_of: date | None = None, passes: int = 6):
     return ratings, mu, home_adv
 
 
-def _shrink(v, k=0.25):
-    """Pull extreme ratings toward 1.0 (regularization for small samples)."""
+def _shrink(v, k=0.20):
+    """Pull extreme ratings toward 1.0 (regularization for small samples).
+    Tuned via walk-forward backtest against the goals-only baseline; see
+    data/model/backtest.py."""
     return max(0.35, min(2.2, 1.0 + (v - 1.0) * (1 - k)))
 
 

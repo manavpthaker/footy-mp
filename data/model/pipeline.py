@@ -29,20 +29,27 @@ MODEL_VERSION = "footy-mp-v1"
 
 # --------------- load ---------------
 
+def _page_all(query_fn, page_size: int = 1000) -> list[dict]:
+    """PostgREST caps at 1000 rows per response — page through until short."""
+    out: list[dict] = []
+    offset = 0
+    while True:
+        chunk = getattr(query_fn().range(offset, offset + page_size - 1).execute(),
+                        "data", None) or []
+        out.extend(chunk)
+        if len(chunk) < page_size:
+            return out
+        offset += page_size
+
+
 def _load_matches_for_fit() -> list[dict]:
     """All finished matches with either xG or goals, in engine.fit_ratings shape."""
     client = db.client()
-    # pull matches + stats in two queries then join in Python (avoid PostgREST joins)
-    matches = getattr(
-        client.table("matches").select(
-            "id,kickoff_utc,home_team_id,away_team_id,home_goals,away_goals,status,league_id"
-        ).eq("status", "final").execute(),
-        "data", None,
-    ) or []
-    stats = getattr(
-        client.table("team_match_stats").select("match_id,team_id,is_home,xg,xga").execute(),
-        "data", None,
-    ) or []
+    matches = _page_all(lambda: client.table("matches").select(
+        "id,kickoff_utc,home_team_id,away_team_id,home_goals,away_goals,status,league_id"
+    ).eq("status", "final"))
+    stats = _page_all(lambda: client.table("team_match_stats").select(
+        "match_id,team_id,is_home,xg,xga"))
     teams = getattr(client.table("teams").select("id,name").execute(), "data", None) or []
     team_name = {t["id"]: t["name"] for t in teams}
     stat_by_mid = {}

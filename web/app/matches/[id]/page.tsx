@@ -9,16 +9,17 @@ import type { Match, Team, League, Prediction } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 
 async function loadMatch(id: number) {
-  const { data: m } = await server().from("matches").select("*").eq("id", id).maybeSingle();
+  const s = await server();
+  const { data: m } = await s.from("matches").select("*").eq("id", id).maybeSingle();
   if (!m) return null;
   const match = m as Match;
   const [homeR, awayR, leagueR, predR] = await Promise.all([
-    server().from("teams").select("*").eq("id", match.home_team_id).maybeSingle(),
-    server().from("teams").select("*").eq("id", match.away_team_id).maybeSingle(),
+    s.from("teams").select("*").eq("id", match.home_team_id).maybeSingle(),
+    s.from("teams").select("*").eq("id", match.away_team_id).maybeSingle(),
     match.league_id
-      ? server().from("leagues").select("*").eq("id", match.league_id).maybeSingle()
+      ? s.from("leagues").select("*").eq("id", match.league_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    server().from("predictions").select("*")
+    s.from("predictions").select("*")
       .eq("match_id", id).eq("model_version", MODEL_VERSION).maybeSingle(),
   ]);
   return {

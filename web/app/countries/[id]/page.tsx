@@ -18,9 +18,10 @@ export default async function CountryPage({ params }: { params: { id: string } }
   const followed = follows.some(f => f.entity_type === "country" && f.entity_id === id);
 
   // find national team + all players from this country
-  const { data: nt } = await server().from("teams")
+  const s = await server();
+  const { data: nt } = await s.from("teams")
     .select("*").eq("country_id", id).eq("is_national", true).maybeSingle();
-  const { data: players } = await server().from("players")
+  const { data: players } = await s.from("players")
     .select("id,name,team_id,position").eq("country_id", id).order("name");
 
   const teamIds = nt ? [nt.id] : [];

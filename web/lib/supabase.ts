@@ -1,34 +1,27 @@
 /**
- * Supabase client helpers. Two flavors:
- *   - browser(): anon key, used in client components + browser fetches.
- *   - server(): service-role bypass when env has SUPABASE_SERVICE_KEY;
- *               falls back to anon so read-only pages still work.
- * All footy-mp writes (follows toggles) go through the browser client to
- * respect RLS. Ingest / model writes happen from the Python pipeline.
+ * Supabase client wrappers.
+ *
+ * Real clients live in `utils/supabase/{server,client}.ts` and follow the
+ * @supabase/ssr cookie-aware pattern (session refresh handled by
+ * `middleware.ts`). This module keeps the historical `browser()` / `server()`
+ * façade so existing callers don't have to thread `cookies()` themselves.
+ *
+ * Writes (follow toggles) go through the browser client and respect RLS.
+ * Ingest / model writes still happen in the Python pipeline via the
+ * service-role key server-side.
  */
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const SERVICE = process.env.SUPABASE_SERVICE_KEY;
-
-let _browser: SupabaseClient | null = null;
-let _server: SupabaseClient | null = null;
+import { cookies } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient as createServer } from "@/utils/supabase/server";
+import { createClient as createBrowser } from "@/utils/supabase/client";
 
 export function browser(): SupabaseClient {
-  if (_browser) return _browser;
-  if (!URL || !ANON) throw new Error("SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY missing");
-  _browser = createClient(URL, ANON);
-  return _browser;
+  return createBrowser() as unknown as SupabaseClient;
 }
 
-export function server(): SupabaseClient {
-  if (_server) return _server;
-  if (!URL) throw new Error("SUPABASE_URL missing");
-  const key = SERVICE || ANON;
-  if (!key) throw new Error("Neither SUPABASE_SERVICE_KEY nor ANON key available server-side");
-  _server = createClient(URL, key, { auth: { persistSession: false } });
-  return _server;
+export async function server(): Promise<SupabaseClient> {
+  const cookieStore = await cookies();
+  return createServer(cookieStore) as unknown as SupabaseClient;
 }
 
 // ---------- Types (match schema.sql; only fields we surface in the UI) ----------

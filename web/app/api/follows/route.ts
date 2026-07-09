@@ -11,7 +11,8 @@ export async function POST(req: Request) {
   if (!VALID.has(entity_type) || !Number.isFinite(entity_id)) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
-  const { error } = await server()
+  const s = await server();
+  const { error } = await s
     .from("follows")
     .upsert({ user_id: USER_ID, entity_type, entity_id },
             { onConflict: "user_id,entity_type,entity_id" });
@@ -26,7 +27,8 @@ export async function DELETE(req: Request) {
   if (!VALID.has(entity_type) || !Number.isFinite(entity_id)) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
-  const { error } = await server()
+  const s = await server();
+  const { error } = await s
     .from("follows")
     .delete()
     .eq("user_id", USER_ID)

@@ -1,7 +1,7 @@
 /**
  * Server-side reads over Supabase for the dashboard + entity pages.
- * Everything here is idempotent / cache-safe: we call server() for the
- * session, and let Next's route-segment cache handle re-fetching.
+ * All functions are called from server components — they await server() to
+ * get a cookie-aware @supabase/ssr client.
  */
 import { server, Team, Player, League, Country, Match, Prediction, Follow, ModelRating, EntityType } from "./supabase";
 
@@ -11,20 +11,20 @@ export const MODEL_VERSION = "footy-mp-v1";
 // ---------- Follows ----------
 
 export async function listFollows(): Promise<Follow[]> {
-  const { data } = await server().from("follows").select("*").eq("user_id", USER_ID);
+  const s = await server();
+  const { data } = await s.from("follows").select("*").eq("user_id", USER_ID);
   return (data ?? []) as Follow[];
 }
 
 export async function loadFollowedEntities(): Promise<{
   players: Player[]; teams: Team[]; leagues: League[]; countries: Country[];
 }> {
-  const follows = await listFollows();
+  const [follows, s] = await Promise.all([listFollows(), server()]);
   const groups: Record<EntityType, number[]> = {
     player: [], team: [], league: [], country: [],
   };
   for (const f of follows) groups[f.entity_type].push(f.entity_id);
 
-  const s = server();
   const [players, teams, leagues, countries] = await Promise.all([
     groups.player.length
       ? s.from("players").select("*").in("id", groups.player).then(r => (r.data ?? []) as Player[])
@@ -53,8 +53,8 @@ export interface RichMatch extends Match {
 
 export async function upcomingForTeams(teamIds: number[], limit = 20): Promise<RichMatch[]> {
   if (!teamIds.length) return [];
-  const nowIso = new Date().toISOString();
-  const { data } = await server()
+  const s = await server();
+  const { data } = await s
     .from("matches")
     .select("*")
     .in("status", ["scheduled", "live"])
@@ -67,7 +67,8 @@ export async function upcomingForTeams(teamIds: number[], limit = 20): Promise<R
 
 export async function recentResultsForTeams(teamIds: number[], limit = 20): Promise<RichMatch[]> {
   if (!teamIds.length) return [];
-  const { data } = await server()
+  const s = await server();
+  const { data } = await s
     .from("matches")
     .select("*")
     .eq("status", "final")
@@ -80,7 +81,8 @@ export async function recentResultsForTeams(teamIds: number[], limit = 20): Prom
 export async function fixturesForLeague(leagueId: number, days = 14): Promise<RichMatch[]> {
   const start = new Date(Date.now() - 24 * 3600_000).toISOString();
   const end = new Date(Date.now() + days * 24 * 3600_000).toISOString();
-  const { data } = await server()
+  const s = await server();
+  const { data } = await s
     .from("matches")
     .select("*")
     .eq("league_id", leagueId)
@@ -91,7 +93,8 @@ export async function fixturesForLeague(leagueId: number, days = 14): Promise<Ri
 }
 
 export async function resultsForLeague(leagueId: number, limit = 20): Promise<RichMatch[]> {
-  const { data } = await server()
+  const s = await server();
+  const { data } = await s
     .from("matches")
     .select("*")
     .eq("league_id", leagueId)
@@ -106,7 +109,7 @@ async function enrich(matches: Match[]): Promise<RichMatch[]> {
   const teamIds = Array.from(new Set(matches.flatMap(m => [m.home_team_id, m.away_team_id])));
   const leagueIds = Array.from(new Set(matches.map(m => m.league_id).filter((x): x is number => x !== null)));
   const matchIds = matches.map(m => m.id);
-  const s = server();
+  const s = await server();
   const [teams, leagues, preds] = await Promise.all([
     s.from("teams").select("*").in("id", teamIds).then(r => (r.data ?? []) as Team[]),
     leagueIds.length
@@ -130,24 +133,29 @@ async function enrich(matches: Match[]): Promise<RichMatch[]> {
 // ---------- Entity page loaders ----------
 
 export async function getTeam(id: number): Promise<Team | null> {
-  const { data } = await server().from("teams").select("*").eq("id", id).maybeSingle();
+  const s = await server();
+  const { data } = await s.from("teams").select("*").eq("id", id).maybeSingle();
   return (data ?? null) as Team | null;
 }
 export async function getPlayer(id: number): Promise<Player | null> {
-  const { data } = await server().from("players").select("*").eq("id", id).maybeSingle();
+  const s = await server();
+  const { data } = await s.from("players").select("*").eq("id", id).maybeSingle();
   return (data ?? null) as Player | null;
 }
 export async function getLeague(id: number): Promise<League | null> {
-  const { data } = await server().from("leagues").select("*").eq("id", id).maybeSingle();
+  const s = await server();
+  const { data } = await s.from("leagues").select("*").eq("id", id).maybeSingle();
   return (data ?? null) as League | null;
 }
 export async function getCountry(id: number): Promise<Country | null> {
-  const { data } = await server().from("countries").select("*").eq("id", id).maybeSingle();
+  const s = await server();
+  const { data } = await s.from("countries").select("*").eq("id", id).maybeSingle();
   return (data ?? null) as Country | null;
 }
 
 export async function latestRatingForTeam(id: number): Promise<ModelRating | null> {
-  const { data } = await server()
+  const s = await server();
+  const { data } = await s
     .from("model_ratings").select("*")
     .eq("team_id", id).eq("model_version", MODEL_VERSION)
     .order("as_of_date", { ascending: false }).limit(1).maybeSingle();
@@ -155,11 +163,13 @@ export async function latestRatingForTeam(id: number): Promise<ModelRating | nul
 }
 
 export async function teamsInLeague(leagueId: number): Promise<Team[]> {
-  const { data } = await server().from("teams").select("*").eq("league_id", leagueId).order("name");
+  const s = await server();
+  const { data } = await s.from("teams").select("*").eq("league_id", leagueId).order("name");
   return (data ?? []) as Team[];
 }
 
 export async function playersOnTeam(teamId: number): Promise<Player[]> {
-  const { data } = await server().from("players").select("*").eq("team_id", teamId).order("name");
+  const s = await server();
+  const { data } = await s.from("players").select("*").eq("team_id", teamId).order("name");
   return (data ?? []) as Player[];
 }

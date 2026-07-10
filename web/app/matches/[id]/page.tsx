@@ -1,133 +1,204 @@
+import React from "react";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { AppShell, Panel, SectionHeading } from "@/components/AppShell";
-import { StatCard } from "@/components/StatCard";
-import { server } from "@/lib/supabase";
-import { MODEL_VERSION } from "@/lib/data";
-import type { Match, Team, League, Prediction } from "@/lib/supabase";
+import { ScreenHeader } from "@/components/mobile/ScreenHeader";
+import { Pad, eyebrow, mono } from "@/components/mobile/primitives";
+// @ts-ignore
+import { SectionHeading } from "@/components/ds";
+// @ts-ignore
+import { ProbabilityBar } from "@/components/ds";
+// @ts-ignore
+import { StatCard } from "@/components/ds";
+// @ts-ignore
+import { ScorelineGrid } from "@/components/ds";
+// @ts-ignore
+import { FormPills } from "@/components/ds";
+// @ts-ignore
+import { FactorBar } from "@/components/ds";
+import { getMatch, formLast5, factorsForTeam, poissonMatrix } from "@/lib/data";
+import { flagFor, shortNameFor, competitionCode } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-async function loadMatch(id: number) {
-  const s = await server();
-  const { data: m } = await s.from("matches").select("*").eq("id", id).maybeSingle();
-  if (!m) return null;
-  const match = m as Match;
-  const [homeR, awayR, leagueR, predR] = await Promise.all([
-    s.from("teams").select("*").eq("id", match.home_team_id).maybeSingle(),
-    s.from("teams").select("*").eq("id", match.away_team_id).maybeSingle(),
-    match.league_id
-      ? s.from("leagues").select("*").eq("id", match.league_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    s.from("predictions").select("*")
-      .eq("match_id", id).eq("model_version", MODEL_VERSION).maybeSingle(),
-  ]);
-  return {
-    match,
-    home: homeR.data as Team | null,
-    away: awayR.data as Team | null,
-    league: leagueR.data as League | null,
-    prediction: predR.data as Prediction | null,
-  };
-}
-
-export default async function MatchPage({ params }: { params: { id: string } }) {
+export default async function MatchDetail({ params }: { params: { id: string } }) {
   const id = Number(params.id);
-  const bundle = await loadMatch(id);
-  if (!bundle) notFound();
-  const { match, home, away, league, prediction } = bundle;
-  const kickoff = new Date(match.kickoff_utc);
+  const m = await getMatch(id);
+  if (!m) notFound();
 
-  const isLive = match.status === "live";
-  const isFinal = match.status === "final";
+  const [homeForm, awayForm, homeFactors, awayFactors] = await Promise.all([
+    formLast5(m.home_team_id),
+    formLast5(m.away_team_id),
+    factorsForTeam(m.home_team_id),
+    factorsForTeam(m.away_team_id),
+  ]);
+
+  const isFinal = m.status === "final";
+  const isLive = m.status === "live";
+  const kick = new Date(m.kickoff_utc);
+  const home = m.home_team; const away = m.away_team;
+  const compName = m.league?.name ?? "";
+  const pred = m.prediction;
+  const pH = pred?.p_home != null ? Math.round(Number(pred.p_home) * 100) : null;
+  const pD = pred?.p_draw != null ? Math.round(Number(pred.p_draw) * 100) : null;
+  const pA = pH != null && pD != null ? 100 - pH - pD : null;
+  const verdict = verdictLine(m);
 
   return (
-    <AppShell>
-      <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-        {league && (
-          <Link href={`/leagues/${league.id}`} style={{
-            fontSize: "var(--fs-xs)", color: "var(--text-faint)",
-            textTransform: "uppercase", letterSpacing: "0.1em",
-          }}>← {league.name}</Link>
-        )}
-
+    <div>
+      <ScreenHeader
+        eyebrow={compName}
+        title={`${home ? shortNameFor(home.name) : "TBD"} v ${away ? shortNameFor(away.name) : "TBD"}`}
+      />
+      <Pad style={{ paddingTop: 14 }}>
         <div style={{
-          display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 20,
+          display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8,
+          background: "var(--surface-panel)", border: "1px solid var(--border)",
+          borderRadius: "var(--radius-2xl)", padding: "16px 12px",
+          boxShadow: isLive ? "inset 3px 0 0 var(--status-live)" : "none",
         }}>
-          <TeamHero name={home?.name ?? "—"} align="right" teamId={match.home_team_id} />
-          <div style={{
-            fontFamily: "var(--font-mono)", fontSize: 42, fontWeight: 700,
-            fontVariantNumeric: "tabular-nums", textAlign: "center", lineHeight: 1,
-          }}>
-            {isFinal ? `${match.home_goals} – ${match.away_goals}` :
-             isLive ? <span style={{ color: "var(--status-live)" }}>{match.home_goals ?? 0} – {match.away_goals ?? 0}</span> :
-             "vs"}
-            {match.went_pens && (
-              <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-muted)", marginTop: 4 }}>
-                ({match.pens_home}–{match.pens_away} p)
-              </div>
-            )}
+          <TeamCell name={home?.name ?? "TBD"} />
+          <div style={{ textAlign: "center" }}>
             <div style={{
-              fontFamily: "var(--font-ui)", fontSize: "var(--fs-xs)",
-              color: "var(--text-muted)", marginTop: 8, fontWeight: 500,
+              ...mono, fontSize: 32, fontWeight: 700, lineHeight: 1,
+              color: isLive ? "var(--status-live)" : "var(--text-primary)",
             }}>
-              {isLive ? `LIVE · ${match.minute ?? 0}′` :
-               isFinal ? "FT" :
-               kickoff.toLocaleString(undefined, {
-                 weekday: "short", month: "short", day: "numeric",
-                 hour: "2-digit", minute: "2-digit",
-               })}
+              {isFinal || isLive ? `${m.home_goals ?? 0}–${m.away_goals ?? 0}` : "vs"}
+            </div>
+            {m.went_pens && (
+              <div style={{
+                ...mono, fontSize: "var(--fs-xs)", color: "var(--text-muted)", marginTop: 4,
+              }}>{m.pens_home}–{m.pens_away} pens</div>
+            )}
+            <div style={{ ...eyebrow, marginTop: 6 }}>
+              {isLive ? <span style={{ color: "var(--status-live)" }}>● {m.minute ?? 0}′</span>
+                : isFinal ? "FULL TIME"
+                : kick.toLocaleDateString(undefined, {
+                    weekday: "short", month: "short", day: "numeric",
+                  }) + " · " + kick.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
             </div>
           </div>
-          <TeamHero name={away?.name ?? "—"} align="left" teamId={match.away_team_id} />
+          <TeamCell name={away?.name ?? "TBD"} />
         </div>
 
-        {prediction && (
-          <Panel>
-            <SectionHeading eyebrow="model prediction · footy-mp v1">
-              What we expected
+        {pred && pH != null && pD != null && pA != null && (
+          <>
+            <SectionHeading tick="var(--accent-2)">
+              {isFinal ? "What the model expected" : "Pre-match forecast"}
             </SectionHeading>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <StatCard label="p(home)" value={pct(prediction.p_home)} tone="accent" />
-              <StatCard label="p(draw)" value={pct(prediction.p_draw)} />
-              <StatCard label="p(away)" value={pct(prediction.p_away)} tone="steel" />
+            <ProbabilityBar
+              home={pH} draw={pD} away={pA}
+              homeLabel={home ? shortNameFor(home.name) : null}
+              awayLabel={away ? shortNameFor(away.name) : null}
+              height={30}
+            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
               <StatCard label="expected goals"
-                        value={`${(prediction.home_xg ?? 0).toFixed(2)} – ${(prediction.away_xg ?? 0).toFixed(2)}`} />
-              {prediction.p_advance_home !== null && (
-                <StatCard label="home advances" value={pct(prediction.p_advance_home)} tone="gold"
-                          sub={`ET: ${pct(prediction.p_et)} · pens: ${pct(prediction.p_pens)}`} />
-              )}
+                value={`${Number(pred.home_xg ?? 0).toFixed(2)}–${Number(pred.away_xg ?? 0).toFixed(2)}`} />
+              <StatCard label="model" value="v1" unit=" · xG Dixon-Coles" />
             </div>
-          </Panel>
+            {verdict && (
+              <div style={{
+                marginTop: 10, padding: "10px 12px",
+                borderLeft: "3px solid var(--accent)",
+                background: "var(--surface-tint)", borderRadius: "var(--radius-md)",
+                fontSize: "var(--fs-sm)", color: "var(--text-muted)",
+              }}>{verdict}</div>
+            )}
+
+            {pred.home_xg != null && pred.away_xg != null && (
+              <>
+                <SectionHeading>Scoreline odds</SectionHeading>
+                <div style={{
+                  background: "var(--surface-panel)", border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-xl)", padding: 12,
+                }}>
+                  <ScorelineGrid
+                    home={home ? shortNameFor(home.name) : "H"}
+                    away={away ? shortNameFor(away.name) : "A"}
+                    matrix={poissonMatrix(Number(pred.home_xg), Number(pred.away_xg), 5)}
+                  />
+                </div>
+              </>
+            )}
+          </>
         )}
 
-        {isLive && (
-          <Panel style={{ borderColor: "var(--status-live)", borderWidth: 1 }}>
-            <SectionHeading eyebrow="the lowdown">Live read</SectionHeading>
-            <p style={{ color: "var(--text-primary)", margin: 0 }}>
-              {home?.name} vs {away?.name} — {match.minute ?? 0} minutes in,
-              scoreline {match.home_goals ?? 0}–{match.away_goals ?? 0}.
-              {prediction && ` The model priced this at ${pct(prediction.p_home)} home / ${pct(prediction.p_draw)} draw / ${pct(prediction.p_away)} away pre-kick, with ${(prediction.home_xg ?? 0).toFixed(1)}–${(prediction.away_xg ?? 0).toFixed(1)} expected goals.`}
-            </p>
-          </Panel>
+        {(homeForm.length || awayForm.length) > 0 && home && away && (
+          <>
+            <SectionHeading tick="var(--gold)">Form · last 5</SectionHeading>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <FormPanel label={`${flagFor(home.name)} ${shortNameFor(home.name)}`} results={homeForm} />
+              <FormPanel label={`${flagFor(away.name)} ${shortNameFor(away.name)}`} results={awayForm} />
+            </div>
+          </>
         )}
-      </div>
-    </AppShell>
+
+        {(homeFactors.length || awayFactors.length) > 0 && home && away && (
+          <>
+            <SectionHeading>What drives the forecast</SectionHeading>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <FactorPanel label={shortNameFor(home.name)} factors={homeFactors} />
+              <FactorPanel label={shortNameFor(away.name)} factors={awayFactors} />
+            </div>
+            <div style={{ ...eyebrow, margin: "8px 2px 0" }}>
+              z-scores vs field average · fitted on 2-season xG
+            </div>
+          </>
+        )}
+        <div style={{ height: 16 }} />
+      </Pad>
+    </div>
   );
 }
 
-function pct(v: number | null) {
-  if (v === null || v === undefined) return "—";
-  return `${Math.round(v * 100)}%`;
-}
-
-function TeamHero({ name, align, teamId }: { name: string; align: "left" | "right"; teamId: number }) {
+function TeamCell({ name }: { name: string }) {
   return (
-    <Link href={`/teams/${teamId}`}
-      style={{
-        fontFamily: "var(--font-display)", fontSize: "var(--fs-title)",
-        fontWeight: 800, letterSpacing: "0.02em", textTransform: "uppercase",
-        textAlign: align, color: "var(--text-primary)",
-      }}>{name}</Link>
+    <div style={{ textAlign: "center", minWidth: 0 }}>
+      <div style={{ fontSize: 30 }}>{flagFor(name)}</div>
+      <div style={{
+        fontWeight: 700, fontSize: "var(--fs-sm)",
+        textTransform: "uppercase", letterSpacing: "0.03em", marginTop: 4,
+      }}>{name}</div>
+    </div>
   );
+}
+
+function FormPanel({ label, results }: { label: string; results: string[] }) {
+  return (
+    <div style={{
+      background: "var(--surface-panel)", border: "1px solid var(--border)",
+      borderRadius: "var(--radius-xl)", padding: "10px 12px",
+    }}>
+      <div style={{ ...eyebrow, marginBottom: 7 }}>{label}</div>
+      {results.length
+        ? <FormPills results={results} size={20} />
+        : <div style={{ color: "var(--text-faint)", fontSize: "var(--fs-sm)" }}>—</div>}
+    </div>
+  );
+}
+
+function FactorPanel({ label, factors }: { label: string; factors: { label: string; z: number }[] }) {
+  return (
+    <div style={{
+      background: "var(--surface-panel)", border: "1px solid var(--border)",
+      borderRadius: "var(--radius-xl)", padding: "10px 10px 6px",
+    }}>
+      <div style={{ ...eyebrow, marginBottom: 8 }}>{label}</div>
+      {factors.map(f => <FactorBar key={f.label} label={f.label} z={f.z} />)}
+    </div>
+  );
+}
+
+function verdictLine(m: any): string | null {
+  if (m.status !== "final" || !m.prediction || m.prediction.p_home == null) return null;
+  const h = Number(m.prediction.p_home);
+  const d = Number(m.prediction.p_draw ?? 0);
+  const a = Number(m.prediction.p_away ?? 0);
+  const fav = h >= a && h >= d ? "home" : a >= h && a >= d ? "away" : "draw";
+  const winner = m.went_pens ? (m.pens_home > m.pens_away ? "home" : "away")
+    : m.home_goals > m.away_goals ? "home"
+    : m.away_goals > m.home_goals ? "away" : "draw";
+  const favP = Math.round(Math.max(h, d, a) * 100);
+  if (fav === winner) return `Model favorite landed — priced ${favP}% pre-kick.`;
+  const winP = Math.round((winner === "home" ? h : winner === "away" ? a : d) * 100);
+  return `Upset by the model's book — the winner carried just ${winP}% pre-kick.`;
 }

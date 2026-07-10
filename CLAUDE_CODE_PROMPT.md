@@ -85,26 +85,50 @@ Countries: Colombia. (Confirm/extend with the user if they add names.)
    If it doesn't, tune (recency half-life, DC rho, shrinkage) until it does, and report the numbers.
    Do not proceed to Phase 3 until this passes.
 
-## Phase 3 — Next.js app (M3)
+## Phase 3 — Next.js app (M3): build the MOBILE 4-tab redesign
 Create `web/` — Next.js 14 App Router, TypeScript, deploy target Vercel.
-1. `lib/supabase.ts` server + client helpers. Read models/matches from Supabase.
-2. Pages:
-   - `/` dashboard: everything the user follows — next fixtures, latest results, form, and each
-     upcoming match's model prediction (p_home/draw/away, xG, and for knockouts the advance/ET/pens).
-   - `/players/[id]`, `/teams/[id]`, `/leagues/[id]` (table + fixtures + xG), `/countries/[id]`.
-   - Follow/unfollow buttons writing to `follows`.
-3. API route handlers over Supabase for follows + reads.
-4. **Style strictly from the Quant Desk design handoff in `design/`** (see the Design system section
-   above) — it is the source of truth. Wire `design/project/styles.css` into the app, adopt the
-   pre-built React components from `design/project/components/`, and compose views to match
-   `design/project/ui_kits/visualizer/`. Metrics are the hero: lead with numbers, tabular figures,
-   gold ★ for followed entities. Use the CSS variables/semantic tokens, never hardcode colors.
+
+**The pixel-level target is the mobile handoff in `design/handoff-mobile/`. Read
+`design/handoff-mobile/README.md` top to bottom first — it is a high-fidelity spec** with exact
+layout, spacing, colors, radii, and interactions for every screen. The prototype JSX
+(`design/handoff-mobile/footy-mp/screens-main.jsx`, `screens-detail.jsx`, `ui.jsx`, `app.jsx`,
+`ios-frame.jsx`) is the reference implementation; recreate it in Next.js — do not copy the Babel
+prototype verbatim. Its mock `data.js` mirrors the real Supabase schema, so mapping is ~1:1.
+
+**What the current live build (mpfc-ashen.vercel.app) got WRONG — do not repeat:** it's a desktop
+single-scroll page of flat text link-lists (a 20-row "recent results" wall, bare lists for
+leagues/teams/players), it uses none of the Quant Desk components, and the model is invisible.
+Replace it entirely with the mobile app below.
+
+1. `lib/supabase.ts` (server + client) and `lib/data.ts` mapping Supabase rows to the shapes the
+   screens consume (matches, predictions, model_ratings, follows) — mirror `handoff-mobile/.../data.js`.
+2. **Mobile-first, 4-tab shell** with an always-visible bottom tab bar (~48px targets, 18px safe-area
+   pad), detail screens pushed on a stack over the active tab (sticky back-chevron header), nav +
+   follow state persisted (URL routes + Supabase `follows`):
+   - **Today** (default) — next-match hero (gold rail), live hero (red rail, pulsing dot), "next up",
+     news, WC knockouts, "just in" results, "your players at the cup" (PlayerStatRow). Model is
+     first-class: ProbabilityBar in every hero.
+   - **Matches** — UPCOMING/RESULTS segmented control + competition chip rail + day-grouped FixtureGroup.
+   - **Tables** — league chip rail + LeagueTable with zone rails (UCL ember / UEL steel / conf amber /
+     releg red), followed teams gold ★, colored form column, zone legend.
+   - **Following** — 3 StatCards (players/teams/leagues) + sectioned watchlist with icon-only FollowButtons.
+3. **Detail screens** (pushed): Match (scoreboard + pre-match forecast ProbabilityBar + StatCards +
+   Verdict callout + ScorelineGrid 5×5 Poisson from pred xG + FormPills + FactorBars), Team (RatingRing
+   + attack/defense StatCards + form + MATCHES/SQUAD/MODEL segmented), Player, League. Every screen
+   surfaces the xG model as content, per the README.
+4. **Port the Quant Desk DS components** from `design/project/components/{core,football,data}/` into
+   `web/components/` (MatchRow, FixtureGroup, ProbabilityBar, LeagueTable, StatCard, RatingRing,
+   FactorBar, FormPills, ScorelineGrid, PlayerCard, PlayerStatRow, FollowButton, SectionHeading,
+   CompetitionBadge, Tag). Wire `design/project/styles.css` tokens into the app; use CSS variables /
+   semantic tokens (`--follow` gold, `--status-*`, `--zone-*`), never hardcode colors. Spline Sans Mono.
 5. A live-match view that reuses the WC "lowdown" analytical voice for followed games in progress.
 
 ## Constraints & definition of done
 - Every model change is validated by the backtest; never ship a model that loses to the baseline.
 - Idempotent, re-runnable ingest; the GitHub Action runs green.
-- `npm run build` passes; the dashboard renders the seeded follows with real fixtures + predictions.
+- `npm run build` passes; the **mobile 4-tab app** renders on a phone viewport (Today/Matches/Tables/
+  Following + detail screens) with real follows, fixtures, and model predictions — matching
+  `design/handoff-mobile/`. No flat desktop link-lists.
 - Keep secrets in env vars; never commit keys.
 
 Work phase by phase. After each phase, run the smoke tests / backtest, report results, and commit.

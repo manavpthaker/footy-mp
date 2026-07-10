@@ -19,7 +19,7 @@ export function TabBar() {
   const seg = pathname === "/" ? "today" : pathname.split("/")[1];
   const activeId = TABS.some(t => t.id === seg) ? seg : "today";
   return (
-    <nav style={{
+    <nav className="fmp-mobile-only" style={{
       position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 30,
       display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
       background: "rgba(19,17,16,0.96)", backdropFilter: "blur(6px)",

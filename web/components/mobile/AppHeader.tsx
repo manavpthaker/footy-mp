@@ -1,11 +1,15 @@
 import React from "react";
 
+/**
+ * Mobile-only app header — visible below 900px via the .fmp-mobile-only utility.
+ * On desktop we mount TopNav directly in the layout instead.
+ */
 export function AppHeader({ right = null }: { right?: React.ReactNode }) {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric",
   }).toUpperCase();
   return (
-    <header style={{
+    <header className="fmp-mobile-only" style={{
       position: "sticky", top: 0, zIndex: 20,
       display: "flex", alignItems: "center", gap: 9,
       padding: "10px 16px 9px", background: "var(--grad-header)",

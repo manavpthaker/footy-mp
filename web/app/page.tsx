@@ -40,53 +40,59 @@ export default async function TodayScreen() {
     <div>
       <AppHeader />
       <Pad style={{ paddingTop: 12 }}>
-        {yours.length > 0 && <NextMatchCard m={yours[0]} followedTeamIds={followedTeamIds} />}
-        {live.map(m => <LiveHeroCard key={m.id} m={m} />)}
+        <div className="fmp-two-col-lg">
+          {/* Left / main column: hero + your matches */}
+          <div>
+            {yours.length > 0 && <NextMatchCard m={yours[0]} followedTeamIds={followedTeamIds} />}
+            {live.map(m => <LiveHeroCard key={m.id} m={m} />)}
 
-        <SectionHeading tick="var(--gold)">Next up for you</SectionHeading>
-        {yours.length > 1
-          ? yours.slice(1, 5).map(m => (
-              <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />
-            ))
-          : yours.length === 0
-            ? <EmptyState>No upcoming fixtures for anyone you follow.</EmptyState>
-            : <div style={{ ...eyebrow, margin: "0 2px 4px" }}>
-                that's everything scheduled — more land after the WC final
-              </div>}
+            <SectionHeading tick="var(--gold)">Next up for you</SectionHeading>
+            {yours.length > 1
+              ? yours.slice(1, 5).map(m => (
+                  <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />
+                ))
+              : yours.length === 0
+                ? <EmptyState>No upcoming fixtures for anyone you follow.</EmptyState>
+                : <div style={{ ...eyebrow, margin: "0 2px 4px" }}>
+                    that's everything scheduled — more land after the WC final
+                  </div>}
 
-        {wcKnockout.length > 0 && (
-          <>
-            <SectionHeading
-              tick="var(--accent-2)"
-              trailing={<Link href="/matches" style={{
-                color: "var(--accent-2)", fontSize: "var(--fs-xs)",
-              }}>all →</Link>}
-            >World Cup · knockouts</SectionHeading>
-            {wcKnockout.map(m => <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />)}
-          </>
-        )}
+            {yoursResults.length > 0 && (
+              <>
+                <SectionHeading
+                  trailing={<Link href="/matches" style={{
+                    color: "var(--accent-2)", fontSize: "var(--fs-xs)",
+                  }}>all →</Link>}
+                >Just in</SectionHeading>
+                {yoursResults.slice(0, 4).map(m => (
+                  <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />
+                ))}
+              </>
+            )}
+          </div>
 
-        {yoursResults.length > 0 && (
-          <>
-            <SectionHeading
-              trailing={<Link href="/matches" style={{
-                color: "var(--accent-2)", fontSize: "var(--fs-xs)",
-              }}>all →</Link>}
-            >Just in</SectionHeading>
-            {yoursResults.slice(0, 4).map(m => (
-              <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />
-            ))}
-          </>
-        )}
+          {/* Right / sidebar column: cup + players */}
+          <div>
+            {wcKnockout.length > 0 && (
+              <>
+                <SectionHeading
+                  tick="var(--accent-2)"
+                  trailing={<Link href="/matches" style={{
+                    color: "var(--accent-2)", fontSize: "var(--fs-xs)",
+                  }}>all →</Link>}
+                >World Cup · knockouts</SectionHeading>
+                {wcKnockout.map(m => <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />)}
+              </>
+            )}
 
-        {players.length > 0 && (
-          <>
-            <SectionHeading tick="var(--gold)">Your players</SectionHeading>
-            {players.map(p => (
-              <PlayerRow key={p.id} p={p} />
-            ))}
-          </>
-        )}
+            {players.length > 0 && (
+              <>
+                <SectionHeading tick="var(--gold)">Your players</SectionHeading>
+                {players.map(p => <PlayerRow key={p.id} p={p} />)}
+              </>
+            )}
+          </div>
+        </div>
 
         <div style={{
           ...eyebrow, textAlign: "center", padding: "14px 0 6px",

@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { TabBar } from "@/components/mobile/TabBar";
+import { TopNav } from "@/components/mobile/TopNav";
 
 export const metadata: Metadata = {
   title: "footy-mp",
@@ -10,24 +11,21 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
   themeColor: "#131110",
 };
 
 /**
- * Root layout: constrains to a phone width, always mounts the bottom TabBar,
- * pads the bottom of scrollable content so the TabBar never covers the last row.
+ * Responsive root: `.fmp-shell` caps to 480 on phone / 1200 on desktop.
+ * TopNav shows on desktop only, TabBar shows on mobile only (see globals.css).
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <div style={{
-          maxWidth: 480, margin: "0 auto", minHeight: "100vh",
-          background: "var(--bg-app)", position: "relative",
-        }}>
-          <div style={{ paddingBottom: 92 }}>{children}</div>
+        <div className="fmp-shell">
+          <TopNav />
+          <div className="fmp-shell-inner">{children}</div>
           <TabBar />
         </div>
       </body>

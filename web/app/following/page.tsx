@@ -28,44 +28,46 @@ export default async function FollowingPage() {
             accent={leagues.length > 0 ? "var(--follow)" : "var(--text-faint)"} />
         </div>
 
-        {players.length > 0 && (
-          <>
-            <SectionHeading tick="var(--gold)">Players</SectionHeading>
-            {players.map(p => (
-              <Row key={p.id} href={`/players/${p.id}`}
-                icon={flagFor(undefined, "COL")}
-                name={p.name}
-                meta={p.position ?? "—"}
-                followEntity="player" followId={p.id} />
-            ))}
-          </>
-        )}
+        <div className="fmp-three-col-lg">
+          {players.length > 0 && (
+            <div>
+              <SectionHeading tick="var(--gold)">Players</SectionHeading>
+              {players.map(p => (
+                <Row key={p.id} href={`/players/${p.id}`}
+                  icon={flagFor(undefined, "COL")}
+                  name={p.name}
+                  meta={p.position ?? "—"}
+                  followEntity="player" followId={p.id} />
+              ))}
+            </div>
+          )}
 
-        {teams.length > 0 && (
-          <>
-            <SectionHeading tick="var(--gold)">Teams</SectionHeading>
-            {teams.map(t => (
-              <Row key={t.id} href={`/teams/${t.id}`}
-                icon={flagFor(t.name)}
-                name={t.name}
-                meta={t.is_national ? "National team" : ""}
-                followEntity="team" followId={t.id} />
-            ))}
-          </>
-        )}
+          {teams.length > 0 && (
+            <div>
+              <SectionHeading tick="var(--gold)">Teams</SectionHeading>
+              {teams.map(t => (
+                <Row key={t.id} href={`/teams/${t.id}`}
+                  icon={flagFor(t.name)}
+                  name={t.name}
+                  meta={t.is_national ? "National team" : ""}
+                  followEntity="team" followId={t.id} />
+              ))}
+            </div>
+          )}
 
-        {leagues.length > 0 && (
-          <>
-            <SectionHeading tick="var(--gold)">Leagues</SectionHeading>
-            {leagues.map(l => (
-              <Row key={l.id} href={`/leagues/${l.id}`}
-                icon={"🏆"}
-                name={l.name}
-                meta={l.is_international ? "International" : ""}
-                followEntity="league" followId={l.id} />
-            ))}
-          </>
-        )}
+          {leagues.length > 0 && (
+            <div>
+              <SectionHeading tick="var(--gold)">Leagues</SectionHeading>
+              {leagues.map(l => (
+                <Row key={l.id} href={`/leagues/${l.id}`}
+                  icon={"🏆"}
+                  name={l.name}
+                  meta={l.is_international ? "International" : ""}
+                  followEntity="league" followId={l.id} />
+              ))}
+            </div>
+          )}
+        </div>
 
         {countries.length > 0 && (
           <>

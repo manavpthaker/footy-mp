@@ -49,6 +49,8 @@ export default async function MatchDetail({ params }: { params: { id: string } }
         title={`${home ? shortNameFor(home.name) : "TBD"} v ${away ? shortNameFor(away.name) : "TBD"}`}
       />
       <Pad style={{ paddingTop: 14 }}>
+       <div className="fmp-two-col-lg">
+        <div>
         <div style={{
           display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8,
           background: "var(--surface-panel)", border: "1px solid var(--border)",
@@ -121,7 +123,10 @@ export default async function MatchDetail({ params }: { params: { id: string } }
             )}
           </>
         )}
+        </div>
 
+        {/* Right column on desktop: form + factor drivers (stacks below scoreboard on mobile) */}
+        <div>
         {(homeForm.length || awayForm.length) > 0 && home && away && (
           <>
             <SectionHeading tick="var(--gold)">Form · last 5</SectionHeading>
@@ -144,6 +149,8 @@ export default async function MatchDetail({ params }: { params: { id: string } }
             </div>
           </>
         )}
+        </div>
+       </div>
         <div style={{ height: 16 }} />
       </Pad>
     </div>

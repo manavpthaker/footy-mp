@@ -29,3 +29,44 @@ input, select, textarea { font-family: inherit; color: inherit; }
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
 }
+
+/* ---------- responsive shell ----------
+   Mobile ≤ 899px: single column, max 480, bottom TabBar visible, no top nav.
+   Desktop ≥ 900px: max 1200, side padding, top nav visible, bottom TabBar hidden,
+                    the shell no longer pads for a bottom bar.
+   Screen layouts opt into multi-column via .fmp-two-col-lg and .fmp-three-col-lg.
+*/
+.fmp-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--bg-app);
+  position: relative;
+}
+.fmp-shell-inner { padding-bottom: 92px; }
+.fmp-desktop-only { display: none; }
+.fmp-mobile-only { display: initial; }
+
+/* Two-column layout modifier — mobile stays stacked, desktop splits 55/45. */
+.fmp-two-col-lg { display: block; }
+.fmp-three-col-lg { display: block; }
+
+/* Hide-on-desktop utility — used by content that only makes sense on mobile. */
+@media (min-width: 900px) {
+  .fmp-shell { max-width: 1200px; padding: 0 32px; }
+  .fmp-shell-inner { padding-bottom: 40px; }
+  .fmp-desktop-only { display: initial; }
+  .fmp-mobile-only { display: none; }
+  .fmp-two-col-lg {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .fmp-three-col-lg {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+}

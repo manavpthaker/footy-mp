@@ -123,12 +123,38 @@ Replace it entirely with the mobile app below.
    semantic tokens (`--follow` gold, `--status-*`, `--zone-*`), never hardcode colors. Spline Sans Mono.
 5. A live-match view that reuses the WC "lowdown" analytical voice for followed games in progress.
 
+## Phase 4 — Responsive + refinement (the mobile build overcorrected)
+The current deploy is **mobile-only**: on desktop it strands a narrow phone-width column in dead
+space, and the server-rendered / no-JS output still shows the OLD flat desktop link-lists (so SSR
+never got the new layout). Fix both. Keep the mobile design; make it adapt up.
+
+1. **One responsive app, two IA modes, shared Quant Desk components:**
+   - **Mobile (< 768px):** the `design/handoff-mobile/` 4-tab shell exactly as specced — bottom tab
+     bar, single column, pushed detail screens.
+   - **Desktop (≥ 1024px):** switch the shell — replace the bottom tab bar with a **persistent left
+     sidebar** (the 4 nav items + watchlist summary), a centered content column at a sensible
+     `max-width` (~1100px, not full-bleed, not a 390px phone frame), and a **master–detail split**:
+     list/feed on the left, the Match/Team/Player/League detail rendered in a **right-hand pane**
+     instead of a full-screen push. This mirrors the original visualizer kit
+     (`design/project/ui_kits/visualizer/app.jsx` — rail + `detailPane`). Same components, wider frame.
+   - **Tablet (768–1024px):** single wider column, 2-up content grids where they help; either nav pattern.
+   - Use CSS/Tailwind breakpoints or a `useMediaQuery` — do NOT ship a fixed phone frame centered on desktop.
+2. **Fix SSR:** server-render the real current layout so first paint and the no-JS view match the app
+   (not the old flat lists). Detail routes must render server-side too.
+3. **Data / empty-state polish:** it's off-season, so "next up" is empty. Make empty states useful —
+   pull upcoming from followed *leagues* (not only followed teams), and lead with the model
+   (predictions, ratings, last-5 form) so the page is never a dead "nothing to show."
+4. **General refinement pass:** consistent spacing/rhythm from the token scale, correct touch vs.
+   pointer targets per breakpoint, no horizontal scroll on desktop, real loading/skeleton states,
+   and verify the DS components render with the actual data shapes (no clipped bars, no overflow).
+
 ## Constraints & definition of done
 - Every model change is validated by the backtest; never ship a model that loses to the baseline.
 - Idempotent, re-runnable ingest; the GitHub Action runs green.
-- `npm run build` passes; the **mobile 4-tab app** renders on a phone viewport (Today/Matches/Tables/
-  Following + detail screens) with real follows, fixtures, and model predictions — matching
-  `design/handoff-mobile/`. No flat desktop link-lists.
+- `npm run build` passes; the app is **responsive**: mobile = the `design/handoff-mobile/` 4-tab
+  shell; desktop = sidebar + master–detail at a sensible max-width (no phone frame stranded in dead
+  space). SSR renders the real layout, not the old flat lists. Real follows, fixtures, and model
+  predictions render at every breakpoint.
 - Keep secrets in env vars; never commit keys.
 
 Work phase by phase. After each phase, run the smoke tests / backtest, report results, and commit.

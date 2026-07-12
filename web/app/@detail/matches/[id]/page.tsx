@@ -49,7 +49,7 @@ export default async function MatchDetail({ params }: { params: { id: string } }
         title={`${home ? shortNameFor(home.name) : "TBD"} v ${away ? shortNameFor(away.name) : "TBD"}`}
       />
       <Pad style={{ paddingTop: 14 }}>
-       <div className="fmp-two-col-lg">
+       <div className="">
         <div>
         <div style={{
           display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8,

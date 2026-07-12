@@ -1,0 +1,50 @@
+/* ============================================================
+   WC26 Visualizer — Spacing, radius, shadow, motion tokens
+   Tight 4px-based rhythm to match the dense analytical layout.
+   ============================================================ */
+
+:root {
+  /* ---- Spacing scale (4px base) ---- */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 16px;
+  --space-8: 18px;
+  --space-9: 22px;
+  --space-10: 28px;
+
+  /* ---- Radius ---- */
+  --radius-xs: 2px;  /* tags, tiny chips */
+  --radius-sm: 3px;  /* form pills, slot accents */
+  --radius-md: 4px;  /* buttons, inputs */
+  --radius-lg: 4px; /* fixture rows, tabs container */
+  --radius-xl: 5px; /* cards, panels, group cards */
+  --radius-2xl:6px; /* hero result cards */
+  --radius-pill: 4px; /* status pills — squared, terminal-style */
+  --radius-full: 999px;
+
+  /* ---- Borders ---- */
+  --border-width: 1px;     /* @kind spacing */
+  --accent-rail: 3px;      /* @kind spacing */
+
+  /* ---- Shadows ---- */
+  --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --shadow-lift: 0 8px 22px rgba(0, 0, 0, 0.28); /* hover lift */
+  --shadow-pop:  0 12px 34px rgba(0, 0, 0, 0.5); /* toasts, popovers */
+  --shadow-accent: 0 3px 12px rgba(255, 157, 46, 0.3); /* glow on ember fills */
+  --shadow-gold:   0 4px 14px rgba(255, 206, 83, 0.3);
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+  --dur-fast: 0.12s; /* @kind other */
+  --dur-base: 0.15s; /* @kind other */
+  --dur-slow: 0.3s;  /* @kind other */
+  --dur-bar:  0.5s;  /* @kind other */
+
+  /* ---- Layout ---- */
+  --col-groups-w: 460px; /* @kind spacing */
+  --header-h: 56px;      /* @kind spacing */
+}

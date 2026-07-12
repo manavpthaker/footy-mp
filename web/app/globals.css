@@ -11,13 +11,13 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--grad-app);
+  background: var(--coal-950);
   color: var(--text-primary);
   font-family: var(--font-ui);
   font-size: var(--fs-body);
   line-height: var(--lh-base);
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
+  height: 100%;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -30,43 +30,84 @@ input, select, textarea { font-family: inherit; color: inherit; }
   font-feature-settings: 'tnum' 1;
 }
 
-/* ---------- responsive shell ----------
-   Mobile ≤ 899px: single column, max 480, bottom TabBar visible, no top nav.
-   Desktop ≥ 900px: max 1200, side padding, top nav visible, bottom TabBar hidden,
-                    the shell no longer pads for a bottom bar.
-   Screen layouts opt into multi-column via .fmp-two-col-lg and .fmp-three-col-lg.
+/* ---------- responsive shell (per design/handoff-desktop) ----------
+   Mobile:  full-viewport column with bottom TabBar. Content capped
+            at 600px via .fmp-cap so tablets don't stretch a 480 layout.
+   Desktop: two-pane rail+detail. Rail is 460px (var(--col-groups-w)),
+            detail is 1fr; each pane scrolls independently. Both live
+            inside a 1280px max-width container centered on the viewport
+            with vertical borders on the outside edges.
 */
+.fmp-cap { max-width: 600px; width: 100%; margin: 0 auto; }
 .fmp-shell {
-  max-width: 480px;
-  margin: 0 auto;
   min-height: 100vh;
-  background: var(--bg-app);
-  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--grad-app);
 }
-.fmp-shell-inner { padding-bottom: 92px; }
+
+/* mobile scroll region — bottom padding clears the TabBar */
+.fmp-scroll { flex: 1; overflow-y: auto; padding-bottom: 92px; }
+
+/* header tab links (desktop only) */
+.fmp-htab { color: var(--text-faint); }
+.fmp-htab:hover { color: var(--text-muted); }
+.fmp-htab[data-on="true"] { color: var(--accent); }
+
+/* live pulsing dot (used on match cards) */
+.fmp-live-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--status-live); margin-right: 3px; vertical-align: middle;
+  animation: fmpPulse 1.4s ease-out infinite;
+}
+@keyframes fmpPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 93, 58, 0.55); }
+  70%  { box-shadow: 0 0 0 6px rgba(255, 93, 58, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 93, 58, 0); }
+}
+
+/* hide horizontal-scroll chip rail scrollbars */
+.fmp-chip-rail::-webkit-scrollbar { display: none; }
+
+/* responsive visibility utilities */
 .fmp-desktop-only { display: none; }
-.fmp-mobile-only { display: initial; }
+.fmp-mobile-only  { display: initial; }
 
-/* Two-column layout modifier — mobile stays stacked, desktop splits 55/45. */
-.fmp-two-col-lg { display: block; }
-.fmp-three-col-lg { display: block; }
-
-/* Hide-on-desktop utility — used by content that only makes sense on mobile. */
+/* ---------- desktop breakpoint ---------- */
 @media (min-width: 900px) {
-  .fmp-shell { max-width: 1200px; padding: 0 32px; }
-  .fmp-shell-inner { padding-bottom: 40px; }
   .fmp-desktop-only { display: initial; }
-  .fmp-mobile-only { display: none; }
-  .fmp-two-col-lg {
+  .fmp-mobile-only  { display: none; }
+
+  /* desktop shell = header row + two-pane row */
+  .fmp-two-pane {
+    flex: 1; min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    gap: 28px;
-    align-items: start;
+    grid-template-columns: var(--col-groups-w) minmax(0, 1fr);
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    border-inline: 1px solid var(--border);
   }
-  .fmp-three-col-lg {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 20px;
-    align-items: start;
+  .fmp-rail {
+    overflow-y: auto; min-height: 0;
+    border-right: 1px solid var(--border);
+    padding-bottom: 28px;
   }
+  .fmp-detail {
+    overflow-y: auto; min-height: 0;
+    padding-bottom: 28px;
+  }
+
+  /* desktop drops the bottom TabBar padding on the mobile scroll */
+  .fmp-scroll { padding-bottom: 0; }
+}
+
+/* screen-enter transition, gated behind reduced-motion */
+@media (prefers-reduced-motion: no-preference) {
+  .fmp-screen-enter { animation: fmpFadeUp 0.28s cubic-bezier(0.4,0,0.2,1); }
+}
+@keyframes fmpFadeUp {
+  from { opacity: 0; transform: translateY(9px); }
+  to   { opacity: 1; transform: none; }
 }

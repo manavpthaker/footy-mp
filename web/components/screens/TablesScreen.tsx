@@ -1,5 +1,4 @@
 import React from "react";
-import { AppHeader } from "@/components/mobile/AppHeader";
 import { TablesClient } from "./TablesClient";
 import { tableableLeagues, standingsForLeague } from "@/lib/data";
 import { flagFor } from "@/lib/format";
@@ -19,7 +18,7 @@ export default async function TablesPage() {
     }));
   return (
     <div>
-      <AppHeader />
+      
       <TablesClient payload={JSON.parse(JSON.stringify(payload))} />
     </div>
   );

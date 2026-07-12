@@ -1,5 +1,4 @@
 import React from "react";
-import { AppHeader } from "@/components/mobile/AppHeader";
 import { MatchesClient } from "./MatchesClient";
 import { upcomingAll, resultsAll, loadFollowedEntities } from "@/lib/data";
 
@@ -17,7 +16,7 @@ export default async function MatchesPage() {
   ]));
   return (
     <div>
-      <AppHeader />
+      
       <MatchesClient
         upcoming={JSON.parse(JSON.stringify(upcoming))}
         results={JSON.parse(JSON.stringify(results))}

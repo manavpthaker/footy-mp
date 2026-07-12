@@ -21,11 +21,13 @@ export function TabBar() {
   return (
     <nav className="fmp-mobile-only" style={{
       position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 30,
-      display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
       background: "rgba(19,17,16,0.96)", backdropFilter: "blur(6px)",
-      borderTop: "1px solid var(--border)", paddingBottom: 18,
-      maxWidth: 480, margin: "0 auto",
+      borderTop: "1px solid var(--border)",
+      paddingBottom: "max(10px, env(safe-area-inset-bottom))",
     }}>
+      <div className="fmp-cap" style={{
+        display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+      }}>
       {TABS.map(t => {
         const on = t.id === activeId;
         return (
@@ -47,6 +49,7 @@ export function TabBar() {
           </Link>
         );
       })}
+      </div>
     </nav>
   );
 }

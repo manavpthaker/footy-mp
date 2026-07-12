@@ -1,6 +1,5 @@
 import React from "react";
 import Link from "next/link";
-import { AppHeader } from "@/components/mobile/AppHeader";
 import { Pad, eyebrow } from "@/components/mobile/primitives";
 // @ts-ignore
 import { SectionHeading } from "@/components/ds";
@@ -17,7 +16,7 @@ export default async function FollowingPage() {
 
   return (
     <div>
-      <AppHeader />
+      
       <Pad style={{ paddingTop: 12 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
           <StatCard label="players" value={players.length}
@@ -28,7 +27,7 @@ export default async function FollowingPage() {
             accent={leagues.length > 0 ? "var(--follow)" : "var(--text-faint)"} />
         </div>
 
-        <div className="fmp-three-col-lg">
+        <div className="">
           {players.length > 0 && (
             <div>
               <SectionHeading tick="var(--gold)">Players</SectionHeading>

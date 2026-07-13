@@ -93,6 +93,8 @@ def _run_forward(matches: list[dict], use_xg: bool, min_train: int = 200) -> dic
             continue  # skip matches with no xG source (WC26/international)
         if use_xg:
             ratings, mu, hadv = engine.fit_ratings(train, as_of=_d(m.get("date")))
+            by_league = engine.fit_home_adv_by_league(train, as_of=_d(m.get("date")))
+            hadv = by_league.get(m.get("league"), by_league[None])
             lh, la = engine.expected_goals(m["home"], m["away"], ratings, mu, hadv,
                                            m.get("neutral", False))
             p_h, p_d, p_a = engine.outcome_probs(lh, la)

@@ -49,6 +49,24 @@ def _weight(match_date: str, as_of: date) -> float:
     return 0.5 ** (age / HALF_LIFE_DAYS)
 
 
+def _blend_signal(m) -> tuple[float, float] | None:
+    """Blend xG with goals when both are present. xG cuts finishing variance;
+    goals anchor to the outcome scale. Fall back to whichever is available."""
+    hx = m.get('home_xg'); ax = m.get('away_xg')
+    hg = m.get('home_goals'); ag = m.get('away_goals')
+    if hx is not None and hg is not None:
+        hx = XG_GOALS_BLEND * float(hx) + (1 - XG_GOALS_BLEND) * float(hg)
+    elif hx is None:
+        hx = hg
+    if ax is not None and ag is not None:
+        ax = XG_GOALS_BLEND * float(ax) + (1 - XG_GOALS_BLEND) * float(ag)
+    elif ax is None:
+        ax = ag
+    if hx is None or ax is None:
+        return None
+    return float(hx), float(ax)
+
+
 def fit_ratings(matches, as_of: date | None = None, passes: int = 6):
     """
     Returns dict: team -> {'attack': a, 'defense': d}, plus league xG mean and home_adv.
@@ -60,21 +78,10 @@ def fit_ratings(matches, as_of: date | None = None, passes: int = 6):
     as_of = as_of or date.today()
     rows = []
     for m in matches:
-        hx = m.get('home_xg'); ax = m.get('away_xg')
-        hg = m.get('home_goals'); ag = m.get('away_goals')
-        # Blend xG with goals when both are present. xG cuts finishing variance;
-        # goals anchor to the outcome scale. Fall back to whichever is available.
-        if hx is not None and hg is not None:
-            hx = XG_GOALS_BLEND * float(hx) + (1 - XG_GOALS_BLEND) * float(hg)
-        elif hx is None:
-            hx = hg
-        if ax is not None and ag is not None:
-            ax = XG_GOALS_BLEND * float(ax) + (1 - XG_GOALS_BLEND) * float(ag)
-        elif ax is None:
-            ax = ag
-        if hx is None or ax is None:
+        sig = _blend_signal(m)
+        if sig is None:
             continue
-        rows.append((m['home'], m['away'], float(hx), float(ax),
+        rows.append((m['home'], m['away'], sig[0], sig[1],
                      bool(m.get('neutral', False)), _weight(m.get('date', ''), as_of)))
     if not rows:
         return {}, 1.35, 1.0
@@ -111,6 +118,35 @@ def fit_ratings(matches, as_of: date | None = None, passes: int = 6):
 
     ratings = {t: {'attack': attack[t], 'defense': defense[t]} for t in teams}
     return ratings, mu, home_adv
+
+
+def fit_home_adv_by_league(matches, as_of: date | None = None, min_weight: float = 40.0):
+    """Per-league home advantage (recency-weighted home-xG / away-xG on
+    non-neutral matches), falling back to the pooled estimate for sparse
+    leagues. Returns {league_name: hadv, ..., None: pooled} — look up with
+    `hadv.get(league, hadv[None])`. Matches must carry a 'league' key to get
+    a league-specific fit; rows without one only feed the pooled estimate."""
+    from collections import defaultdict as _dd
+    as_of = as_of or date.today()
+    hw = _dd(float); aw = _dd(float); wsum = _dd(float)
+    ghw = gaw = 0.0
+    for m in matches:
+        if m.get('neutral'):
+            continue
+        sig = _blend_signal(m)
+        if sig is None:
+            continue
+        w = _weight(m.get('date', ''), as_of)
+        lg = m.get('league')
+        if lg is not None:
+            hw[lg] += sig[0] * w; aw[lg] += sig[1] * w; wsum[lg] += w
+        ghw += sig[0] * w; gaw += sig[1] * w
+    pooled = max(1.0, min(1.5, ghw / gaw)) if gaw > 0 else 1.15
+    out = {None: pooled}
+    for lg in hw:
+        if wsum[lg] >= min_weight and aw[lg] > 0:
+            out[lg] = max(1.0, min(1.5, hw[lg] / aw[lg]))
+    return out
 
 
 def _shrink(v, k=0.20):

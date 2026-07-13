@@ -24,7 +24,7 @@ from typing import Iterable
 from data import db
 from data.model import engine
 
-MODEL_VERSION = "footy-mp-v1"
+MODEL_VERSION = "footy-mp-v2"
 
 
 # --------------- load ---------------
@@ -46,7 +46,8 @@ def _load_matches_for_fit() -> list[dict]:
     """All finished matches with either xG or goals, in engine.fit_ratings shape."""
     client = db.client()
     matches = _page_all(lambda: client.table("matches").select(
-        "id,kickoff_utc,home_team_id,away_team_id,home_goals,away_goals,status,league_id"
+        "id,kickoff_utc,home_team_id,away_team_id,home_goals,away_goals,status,league_id,"
+        "went_et,went_pens,pens_home,pens_away"
     ).eq("status", "final"))
     stats = _page_all(lambda: client.table("team_match_stats").select(
         "match_id,team_id,is_home,xg,xga"))
@@ -56,11 +57,11 @@ def _load_matches_for_fit() -> list[dict]:
     for s in stats:
         stat_by_mid.setdefault(s["match_id"], []).append(s)
 
-    is_intl_by_league = {}
-    leagues = getattr(client.table("leagues").select("id,is_international").execute(),
+    league_meta = {}
+    leagues = getattr(client.table("leagues").select("id,name,is_international").execute(),
                       "data", None) or []
     for l in leagues:
-        is_intl_by_league[l["id"]] = bool(l.get("is_international"))
+        league_meta[l["id"]] = l
 
     rows = []
     for m in matches:
@@ -74,6 +75,7 @@ def _load_matches_for_fit() -> list[dict]:
                 hx = s.get("xg")
             else:
                 ax = s.get("xg")
+        L = league_meta.get(m["league_id"], {})
         rows.append({
             "match_id": m["id"],
             "home": home, "away": away,
@@ -81,7 +83,12 @@ def _load_matches_for_fit() -> list[dict]:
             "away_goals": m.get("away_goals"),
             "home_xg": hx, "away_xg": ax,
             "date": (m.get("kickoff_utc") or "")[:10],
-            "neutral": is_intl_by_league.get(m["league_id"], False),
+            "neutral": bool(L.get("is_international")),
+            "league": L.get("name"),
+            "went_et": m.get("went_et"),
+            "went_pens": m.get("went_pens"),
+            "pens_home": m.get("pens_home"),
+            "pens_away": m.get("pens_away"),
         })
     return rows
 
@@ -219,13 +226,17 @@ def run() -> dict:
               f"PEN_FACTOR for {len(refit['PEN_FACTOR'])} teams")
 
     ratings, mu, home_adv = engine.fit_ratings(matches_all)
-    print(f"[model] fit ratings for {len(ratings)} teams | mu={mu:.2f} home_adv={home_adv:.2f}")
+    hadv_by_league = engine.fit_home_adv_by_league(matches_all)
+    print(f"[model] fit ratings for {len(ratings)} teams | mu={mu:.2f} "
+          f"home_adv={home_adv:.2f} | per-league hadv for "
+          f"{len(hadv_by_league) - 1} leagues")
     _write_ratings(ratings, mu, home_adv)
 
     upcoming = _load_upcoming()
     preds = []
     for u in upcoming:
-        pred = engine.predict(u["home"], u["away"], ratings, mu, home_adv, u["neutral"])
+        hadv = hadv_by_league.get(u.get("league_name"), hadv_by_league[None])
+        pred = engine.predict(u["home"], u["away"], ratings, mu, hadv, u["neutral"])
         row = {
             "match_id": u["match_id"],
             "p_home": pred["p_home"], "p_draw": pred["p_draw"], "p_away": pred["p_away"],
@@ -233,7 +244,7 @@ def run() -> dict:
             "model_version": MODEL_VERSION,
         }
         if u.get("is_knockout"):
-            ko = engine.knockout(u["home"], u["away"], ratings, mu, home_adv, u["neutral"])
+            ko = engine.knockout(u["home"], u["away"], ratings, mu, hadv, u["neutral"])
             row.update({
                 "p_advance_home": ko["p_advance_home"],
                 "p_et": ko["p_et"], "p_pens": ko["p_pens"],

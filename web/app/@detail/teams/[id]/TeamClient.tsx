@@ -18,6 +18,7 @@ import type { Player, Team } from "@/lib/supabase";
 
 export function TeamClient({
   team, rating, form, factors, players, upcoming, results, followedTeamIds,
+  keyPlayerIds = [],
 }: {
   team: Team;
   rating: { att: number; def: number; overall: number | null } | null;
@@ -27,6 +28,7 @@ export function TeamClient({
   upcoming: RichMatch[];
   results: RichMatch[];
   followedTeamIds: number[];
+  keyPlayerIds?: number[];
 }) {
   const [tab, setTab] = React.useState<"matches" | "squad" | "model">("matches");
   const followedSet = React.useMemo(() => new Set(followedTeamIds), [followedTeamIds]);
@@ -82,10 +84,10 @@ export function TeamClient({
               <Link key={p.id} href={`/players/${p.id}`} style={{ textDecoration: "none", color: "inherit" }}>
                 <PlayerCard lead={p.position ?? "—"} name={p.name}
                   club={`${p.position ?? "—"} · ${team.is_national ? "national" : ""}`}
-                  isKey={p.name.includes("Kane") || p.name.includes("Díaz")} />
+                  isKey={keyPlayerIds.includes(p.id)} />
               </Link>
             ))
-          : <EmptyState>Squad lands with the FBref backfill.</EmptyState>
+          : <EmptyState>Squad fills in as the player backfill lands.</EmptyState>
       )}
 
       {tab === "model" && (

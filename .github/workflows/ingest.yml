@@ -1,26 +1,101 @@
 name: ingest
 
-# Free scheduled data pulls: ESPN fixtures/results daily, Understat xG daily.
-# Writes into Supabase. Secrets: SUPABASE_URL, SUPABASE_SERVICE_KEY.
+# Scheduled data + model runs. Writes into Supabase.
+# Secrets required: SUPABASE_URL, SUPABASE_SERVICE_KEY.
+#
+#   daily (06:00 UTC)  — ESPN results/fixtures + current-season Understat xG,
+#                        then the model pipeline (ratings + predictions).
+#   live  (every 15m)  — cheap ESPN refresh; the script exits immediately
+#                        unless a match is live or kicking off within ±3h.
+#   workflow_dispatch  — run any pipeline mode by hand (backfill, seed,
+#                        model, backtest, ...).
 
 on:
   schedule:
-    - cron: "0 6 * * *"     # 06:00 UTC daily — overnight results + xG
-    - cron: "*/15 * * * *"  # live scores every 15 min (guarded to matchdays in the script)
-  workflow_dispatch: {}
+    - cron: "0 6 * * *"     # daily: overnight results + xG + model refresh
+    - cron: "*/15 * * * *"  # live: guarded inside data/pipeline.py
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Pipeline mode"
+        type: choice
+        default: daily
+        options: [daily, live, backfill, seed, model, backtest, players]
+      backfill_seasons:
+        description: "Understat season codes for backfill mode (comma-separated)"
+        required: false
+        default: ""
+      player_seasons:
+        description: "Season codes for players mode (comma-separated, default: current)"
+        required: false
+        default: ""
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
 jobs:
-  ingest:
+  daily:
+    # scheduled 06:00 run, or manual dispatch in daily mode
+    if: github.event.schedule == '0 6 * * *' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'daily')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: data/requirements.txt
       - name: Install deps
         run: pip install -r data/requirements.txt
-      - name: Run ingest
+      - name: Cache soccerdata (Understat/FBref pages)
+        uses: actions/cache@v4
+        with:
+          path: ~/soccerdata
+          key: soccerdata-${{ github.run_id }}
+          restore-keys: soccerdata-
+      - name: Ingest (ESPN + Understat)
+        run: python -m data.pipeline daily
+      - name: Model (ratings + predictions)
+        run: python -m data.pipeline model
+
+  live:
+    # every 15 minutes; data/pipeline.py exits 0 early outside match windows
+    if: github.event.schedule == '*/15 * * * *' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'live')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: data/requirements.txt
+      - name: Install deps
+        run: pip install -r data/requirements.txt
+      - name: Live refresh (guarded)
+        run: python -m data.pipeline live
+
+  manual:
+    # any other hand-run mode: backfill / seed / model / backtest
+    if: github.event_name == 'workflow_dispatch' && !contains(fromJSON('["daily","live"]'), inputs.mode)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: data/requirements.txt
+      - name: Install deps
+        run: pip install -r data/requirements.txt
+      - name: Cache soccerdata (Understat/FBref pages)
+        uses: actions/cache@v4
+        with:
+          path: ~/soccerdata
+          key: soccerdata-${{ github.run_id }}
+          restore-keys: soccerdata-
+      - name: Run ${{ inputs.mode }}
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python -m data.pipeline   # orchestrator: espn -> stats -> model -> supabase
+          PIPELINE_BACKFILL_SEASONS: ${{ inputs.backfill_seasons }}
+          PIPELINE_PLAYER_SEASONS: ${{ inputs.player_seasons }}
+        run: python -m data.pipeline ${{ inputs.mode }}

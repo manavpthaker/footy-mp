@@ -1,0 +1,28 @@
+name: web
+
+# Build check for the Next.js app — catches type and build errors on push.
+# (Vercel does the real deploy; this keeps main honest even without a deploy.)
+
+on:
+  push:
+    paths: ["web/**", ".github/workflows/web.yml"]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: web }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          # public placeholders — build only needs the envs to exist
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-build-placeholder

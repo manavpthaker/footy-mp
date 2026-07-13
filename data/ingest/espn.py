@@ -52,6 +52,8 @@ def fetch_day(slug: str, yyyymmdd: str) -> list[dict]:
         so_h = home.get("shootoutScore")
         so_a = away.get("shootoutScore")
         went_pens = so_h is not None and so_a is not None
+        detail = (st.get("detail") or "").upper()
+        went_et = went_pens or "AET" in detail or "EXTRA" in detail
         winner_home = home.get("winner")
         winner_away = away.get("winner")
         out.append({
@@ -66,6 +68,7 @@ def fetch_day(slug: str, yyyymmdd: str) -> list[dict]:
             "minute": _minute(comp),
             "home_goals": _int(home.get("score")),
             "away_goals": _int(away.get("score")),
+            "went_et": went_et,
             "went_pens": went_pens,
             "pens_home": _int(so_h) if went_pens else None,
             "pens_away": _int(so_a) if went_pens else None,

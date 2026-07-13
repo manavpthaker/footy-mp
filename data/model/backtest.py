@@ -7,10 +7,13 @@ we're claiming footy-mp beats.
 
 The gate: on the same held-out matches, the xG model must beat the baseline
 on BOTH RPS and log-loss. Results are printed and written to `backtest_runs`.
+Run as a script (or via `python -m data.pipeline backtest`) it exits non-zero
+when the gate fails, so CI can block a model that regresses.
 """
 from __future__ import annotations
 
 import math
+import sys
 from copy import deepcopy
 from datetime import date, datetime
 
@@ -90,6 +93,8 @@ def _run_forward(matches: list[dict], use_xg: bool, min_train: int = 200) -> dic
             continue  # skip matches with no xG source (WC26/international)
         if use_xg:
             ratings, mu, hadv = engine.fit_ratings(train, as_of=_d(m.get("date")))
+            by_league = engine.fit_home_adv_by_league(train, as_of=_d(m.get("date")))
+            hadv = by_league.get(m.get("league"), by_league[None])
             lh, la = engine.expected_goals(m["home"], m["away"], ratings, mu, hadv,
                                            m.get("neutral", False))
             p_h, p_d, p_a = engine.outcome_probs(lh, la)
@@ -151,5 +156,14 @@ def run(min_train: int = 200) -> dict:
             "beats_rps": beats_rps, "beats_log_loss": beats_ll}
 
 
+def main() -> int:
+    res = run()
+    if not (res["beats_rps"] and res["beats_log_loss"]):
+        print("[backtest] GATE FAILED — xG model must beat the baseline on both RPS and log-loss")
+        return 1
+    print("[backtest] gate passed")
+    return 0
+
+
 if __name__ == "__main__":
-    print(run())
+    sys.exit(main())

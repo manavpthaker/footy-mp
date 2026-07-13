@@ -6,13 +6,15 @@ import { SectionHeading } from "@/components/ds";
 // @ts-ignore
 import { StatCard } from "@/components/ds";
 import { FollowToggle } from "@/components/mobile/FollowToggle";
-import { loadFollowedEntities } from "@/lib/data";
+import { loadFollowedEntities, countriesByIds } from "@/lib/data";
 import { flagFor } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function FollowingPage() {
   const { players, teams, leagues, countries } = await loadFollowedEntities();
+  const playerCountries = await countriesByIds(
+    players.map(p => p.country_id).filter((x): x is number => x != null));
 
   return (
     <div>
@@ -31,13 +33,16 @@ export default async function FollowingPage() {
           {players.length > 0 && (
             <div>
               <SectionHeading tick="var(--gold)">Players</SectionHeading>
-              {players.map(p => (
-                <Row key={p.id} href={`/players/${p.id}`}
-                  icon={flagFor(undefined, "COL")}
-                  name={p.name}
-                  meta={p.position ?? "—"}
-                  followEntity="player" followId={p.id} />
-              ))}
+              {players.map(p => {
+                const c = p.country_id ? playerCountries[p.country_id] : undefined;
+                return (
+                  <Row key={p.id} href={`/players/${p.id}`}
+                    icon={flagFor(c?.name, c?.fifa_code)}
+                    name={p.name}
+                    meta={p.position ?? "—"}
+                    followEntity="player" followId={p.id} />
+                );
+              })}
             </div>
           )}
 
@@ -72,7 +77,7 @@ export default async function FollowingPage() {
           <>
             <SectionHeading tick="var(--gold)">Countries</SectionHeading>
             {countries.map(c => (
-              <Row key={c.id} href={`/leagues/`}
+              <Row key={c.id} href={`/countries/${c.id}`}
                 icon={flagFor(c.name, c.fifa_code ?? undefined)}
                 name={c.name}
                 meta={c.confederation ?? ""}

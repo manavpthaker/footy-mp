@@ -30,7 +30,7 @@ Constraint that shapes every choice below: **free data sources only.**
 | Database | **Supabase (Postgres)** | Already used for Grapevines; generous free tier; SQL + row-level security + instant REST. |
 | ETL + Model | **Python** (`data/`) | The model is math-heavy; Python has the football data libs and stats tooling. |
 | Scheduling | **GitHub Actions cron** (free) | Pulls data on a schedule into Supabase. Vercel Cron free tier is too limited for our cadence. |
-| Design | **The Charter** (ported from WC26) | Warm paper, warm ink, one flame accent, Schibsted Grotesk + JetBrains Mono. |
+| Design | **Quant Desk** (see `design/`) | Dark warm-charcoal terminal aesthetic — Spline Sans Mono, ember-orange primary, steel-cyan secondary, tape-gold follow layer. Supersedes the original "Charter" plan; the authoritative UI spec is `design/handoff-mobile/` + `CLAUDE_CODE_PROMPT.md`. |
 
 Data flows: **GitHub Actions (Python ETL) → Supabase → Next.js API routes → React dashboard.**
 The model runs in the ETL layer, writes ratings + predictions to Supabase, and the app just reads them.
@@ -100,9 +100,14 @@ footy-mp fixes the root cause — **crude proxies** — with real data:
    goals because it strips finishing luck. This is the single biggest accuracy lever.
 2. **Dixon-Coles low-score correction** — fixes the independent-Poisson flaw we hit in the WC app
    (it under-produced draws). Adds the tau adjustment for 0-0/1-0/0-1/1-1.
-3. **Home advantage as a fitted parameter**, per league, not a flat constant.
+3. **Home advantage as a fitted parameter**, per league (recency-weighted, pooled
+   fallback for sparse leagues), not a flat constant. *(Implemented in v2 — metric-neutral
+   on big-5-only data, matters as league coverage widens.)*
 4. **Availability adjustment** — down-weight a team's attack/defense when key players (by minutes
-   share + xG/xGA contribution) are injured/suspended. Player data makes this possible.
+   share + xG/xGA contribution) are injured/suspended. **Deferred:** there is no free
+   pre-match injury/absence feed. The path is capturing ESPN pre-match lineups via the
+   15-minute live cron and diffing against the season's minutes leaders; until then the
+   AVAIL factor in the UI reads 0.
 5. **Keep what worked:** the ET → penalty shootout cascade, the shootout-record edge, and the
    nerves/temperament tilt — but re-fit them on the larger dataset instead of curated priors.
 6. **Walk-forward backtesting built in** — RPS, log-loss, Brier, and calibration, run every time
@@ -117,42 +122,55 @@ Model lives in `data/model/`. It reads `team_match_stats` from Supabase, fits ra
 
 ```
 footy-mp/
-  ARCHITECTURE.md            <- this file
-  web/                       <- Next.js app (frontend + API routes)
-    app/
-      page.tsx               <- dashboard (followed entities)
-      players/[id]/page.tsx  <- player page
-      teams/[id]/page.tsx    <- team page
-      leagues/[id]/page.tsx  <- league table + fixtures
-      api/                   <- route handlers over Supabase
-    lib/supabase.ts
-    lib/charter.css          <- ported Charter design tokens
+  ARCHITECTURE.md            <- this file (stack, schema, data, model)
+  CLAUDE_CODE_PROMPT.md      <- build brief; UI phases + redesign spec
+  design/                    <- Quant Desk handoff (tokens, DS components, screens)
+  web/                       <- Next.js 14 App Router (parallel routes @rail/@detail)
+    app/@rail/               <- list panes: Today / Matches / Tables / Following
+    app/@detail/             <- pushed detail stacks: matches/teams/players/leagues/countries
+    app/api/follows/         <- follow toggle API
+    components/ds/           <- ported Quant Desk DS components
+    components/screens/      <- the four tab screens
+    lib/data.ts              <- single server-side Supabase data layer
+    styles/                  <- Quant Desk tokens (colors/fonts/spacing/typography)
   data/                      <- Python ETL + model
     db/schema.sql
-    ingest/espn.py           <- fixtures/results/live (ported from WC sync)
-    ingest/stats.py          <- FBref/Understat via soccerdata (xG/shots)
-    model/ratings.py         <- xG Dixon-Coles fit
-    model/predict.py         <- match predictions + ET/pens cascade
-    model/backtest.py        <- walk-forward validation (ported)
-    requirements.txt
-  .github/workflows/ingest.yml  <- scheduled data pulls
+    pipeline.py              <- orchestrator; modes: daily/live/backfill/players/seed/model/backtest
+    ingest/espn.py           <- fixtures/results/live/shootouts (no key needed)
+    ingest/stats.py          <- Understat xG + player-match stats via soccerdata
+    model/engine.py          <- xG Dixon-Coles + per-league HFA + ET/pens cascade
+    model/pipeline.py        <- fit ratings, write model_ratings + predictions
+    model/backtest.py        <- walk-forward gate vs goals-only baseline (exits non-zero on fail)
+    seed_follows.py, seed_countries.py
+  .github/workflows/
+    ingest.yml               <- daily (ingest+model), guarded live 15-min, manual modes
+    web.yml                  <- Next.js build check
 ```
 
 ---
 
 ## 7. Milestones
 
-- **M0 — Foundation (this session):** spec, schema, repo scaffold, ESPN ingest client, model port.
-- **M1 — Data flowing:** Supabase live, ESPN + Understat ingest populating tables, seed the follow list.
-- **M2 — Model v1:** xG Dixon-Coles fit + predictions written to DB; backtest vs WC26 baseline.
-- **M3 — Dashboard:** Next.js follow + dashboard slice reading from Supabase; player/team/league pages.
-- **M4 — Polish:** Charter styling, live match view (reuse WC lowdown voice), predictions surfaced in UI.
+- **M0 — Foundation:** spec, schema, repo scaffold, ESPN ingest client, model port. ✅
+- **M1 — Data flowing:** Supabase live, ESPN + Understat ingest on cron, follows seeded. ✅
+- **M2 — Model:** xG Dixon-Coles fit + predictions in DB; enforced backtest gate vs the
+  goals-only baseline (v2: RPS 0.1995 vs 0.2088). ✅
+- **M3 — App:** Quant Desk 4-tab mobile shell + desktop rail-and-detail; entity pages
+  incl. countries; predictions and live view surfaced. ✅ (see `CLAUDE_CODE_PROMPT.md` phases)
+- **M4 — All leagues, all teams, all players (current):** player-match stats across big-5
+  seasons, broader league coverage beyond big-5 + internationals, availability adjustment
+  once a lineup source exists, notifications/live polish.
 
 ---
 
-## 8. Open items to confirm
+## 8. Known limitations / next bets
 
-- **Follow list to seed** — which players/teams/leagues/countries to start with (Colombia core +
-  the players Manav named). Drives the initial ingest scope.
-- **League coverage for v1** — Understat's xG covers the big-5 European leagues cleanly; start there,
-  expand via FBref. International (national teams) via ESPN + FBref.
+- **Understat covers the big-5 only** — player stats and xG beyond those leagues need
+  another source (FBref currently CAPTCHA-blocks scrapers; revisit politely or find an API).
+- **Availability adjustment deferred** — no free injury feed; capture ESPN pre-match
+  lineups via the live cron as the path in.
+- **Historical placeholder kickoffs** — pre-2025-26 club matches came from Understat
+  with synthetic 15:00Z kickoff times; ESPN sweeps claim/fix them season by season
+  (2025-26 done).
+- **Single user** — `follows.user_id` hardcoded to `mp`; auth plumbing (@supabase/ssr)
+  is wired but ungated.

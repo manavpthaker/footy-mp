@@ -11,6 +11,7 @@ Everything here is idempotent: upserts key on our natural keys (espn_event_id,
 from __future__ import annotations
 
 import os
+from datetime import date, timedelta
 from functools import lru_cache
 from typing import Iterable
 
@@ -52,6 +53,31 @@ def select(table: str, columns: str = "*", **filters) -> list[dict]:
     for k, v in filters.items():
         q = q.eq(k, v)
     return _rows(q.execute())
+
+
+def page_all(table: str, columns: str = "*", page: int = 1000, **filters) -> list[dict]:
+    """select() that pages past PostgREST's 1000-row cap."""
+    out: list[dict] = []
+    start = 0
+    while True:
+        q = client().table(table).select(columns)
+        for k, v in filters.items():
+            q = q.eq(k, v)
+        chunk = _rows(q.range(start, start + page - 1).execute())
+        out += chunk
+        if len(chunk) < page:
+            return out
+        start += page
+
+
+def find_team(name: str, league_id: int | None = None) -> int | None:
+    """Lookup-only team resolution (never creates — ingest sources that can't be
+    trusted to name teams canonically should skip rather than spawn dupes)."""
+    q = client().table("teams").select("id").eq("name", name)
+    if league_id is not None:
+        q = q.eq("league_id", league_id)
+    hits = _rows(q.execute())
+    return hits[0]["id"] if hits else None
 
 
 # ---------- entity lookups / creates (used for name -> id resolution) ----------
@@ -136,14 +162,52 @@ def get_or_create_player(name: str, team_id: int | None = None,
 
 # ---------- match upserts ----------
 
+def _claim_placeholder(r: dict) -> dict | None:
+    """Find an Understat-created placeholder for this ESPN row — same league and
+    teams within ±1 day, no espn_event_id — and update it in place (ESPN wins on
+    kickoff/status). Returns the claimed row, or None if no placeholder exists."""
+    day = (r.get("kickoff_utc") or "")[:10]
+    if not day:
+        return None
+    d = date.fromisoformat(day)
+    lo = f"{d - timedelta(days=1)}T00:00:00Z"
+    hi = f"{d + timedelta(days=1)}T23:59:59Z"
+    hits = _rows(
+        client().table("matches").select("id")
+        .eq("league_id", r["league_id"]).eq("home_team_id", r["home_team_id"])
+        .eq("away_team_id", r["away_team_id"]).is_("espn_event_id", "null")
+        .gte("kickoff_utc", lo).lte("kickoff_utc", hi).limit(1).execute()
+    )
+    if not hits:
+        return None
+    client().table("matches").update(r).eq("id", hits[0]["id"]).execute()
+    return {**r, "id": hits[0]["id"]}
+
+
 def upsert_matches(rows: list[dict]) -> list[dict]:
     """Upsert on espn_event_id when present, else insert. Rows already resolved
-    to team_id/league_id integers."""
+    to team_id/league_id integers. ESPN rows not yet in the table first try to
+    claim an Understat placeholder so the two sources never duplicate a match."""
     with_ev = [r for r in rows if r.get("espn_event_id")]
     without = [r for r in rows if not r.get("espn_event_id")]
     out = []
     if with_ev:
-        out += upsert("matches", with_ev, on_conflict="espn_event_id")
+        known = {
+            h["espn_event_id"] for h in _rows(
+                client().table("matches").select("espn_event_id")
+                .in_("espn_event_id", [r["espn_event_id"] for r in with_ev]).execute()
+            )
+        }
+        to_upsert = []
+        for r in with_ev:
+            if r["espn_event_id"] not in known:
+                claimed = _claim_placeholder(r)
+                if claimed is not None:
+                    out.append(claimed)
+                    continue
+            to_upsert.append(r)
+        if to_upsert:
+            out += upsert("matches", to_upsert, on_conflict="espn_event_id")
     if without:
         # no natural key — try league+home+away+date match first
         for r in without:

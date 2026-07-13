@@ -8,8 +8,12 @@ Modes (env var PIPELINE_MODE, or CLI arg):
                 Controlled by PIPELINE_BACKFILL_SEASONS (comma-separated Understat
                 season codes, e.g. "2223,2324,2425,2526").
     live      — quick refresh of matches marked 'live' or kicking off today.
+                Exits early (0) when no match is live or within ±3h of kickoff,
+                so the 15-minute cron is nearly free outside matchdays.
     seed      — one-time: create the follows list from data/seed_follows.py.
     model     — Phase 2 hook: run the model pipeline after ingest.
+    backtest  — walk-forward backtest vs the goals-only baseline; exits non-zero
+                if the xG model does not beat the baseline on RPS and log-loss.
 
 Idempotent. Safe to re-run at any cadence.
 """
@@ -27,6 +31,8 @@ from data.normalize import LEAGUE_SOURCES, canonical_team
 DEFAULT_LEAGUES = [
     "Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1",
     "Champions League", "Europa League",
+    # internationals — empty scoreboards off-tournament, so always safe to pull
+    "World Cup", "Euros", "Copa America",
 ]
 
 
@@ -217,6 +223,21 @@ def seed_follows() -> None:
     seed()
 
 
+def _live_window_active(hours: float = 3.0) -> bool:
+    """Cheap matchday guard for the 15-minute cron: True when any match is
+    currently live or kicks off within ±hours of now."""
+    now = datetime.now(timezone.utc)
+    lo = (now - timedelta(hours=hours)).isoformat()
+    hi = (now + timedelta(hours=hours)).isoformat()
+    c = db.client()
+    live = c.table("matches").select("id").eq("status", "live").limit(1).execute()
+    if getattr(live, "data", None):
+        return True
+    near = (c.table("matches").select("id")
+            .gte("kickoff_utc", lo).lte("kickoff_utc", hi).limit(1).execute())
+    return bool(getattr(near, "data", None))
+
+
 # -------------------------- entrypoint --------------------------
 
 def _mode() -> str:
@@ -236,10 +257,13 @@ def main() -> int:
             m = ingest_understat([season])
             print(f"[pipeline] daily done: {n} matches, {m} stat rows")
         elif mode == "live":
+            if not _live_window_active():
+                print("[pipeline] live: no live matches or kickoffs within ±3h — skipping")
+                return 0
             ingest_espn(days_back=1, days_fwd=1)
         elif mode == "backfill":
-            seasons = [s.strip() for s in os.environ.get(
-                "PIPELINE_BACKFILL_SEASONS", "2223,2324,2425,2526").split(",") if s.strip()]
+            seasons = [s.strip() for s in (os.environ.get("PIPELINE_BACKFILL_SEASONS")
+                       or "2223,2324,2425,2526").split(",") if s.strip()]
             print(f"[pipeline] backfill seasons: {seasons}")
             ingest_understat(seasons)
         elif mode == "seed":
@@ -247,6 +271,14 @@ def main() -> int:
         elif mode == "model":
             from data.model.pipeline import run as run_model
             run_model()
+        elif mode == "backtest":
+            from data.model import backtest
+            res = backtest.run()
+            if not (res.get("beats_rps") and res.get("beats_log_loss")):
+                print("[pipeline] BACKTEST GATE FAILED — xG model does not beat "
+                      "the baseline on both RPS and log-loss")
+                return 1
+            print("[pipeline] backtest gate passed")
         else:
             print(f"unknown mode: {mode}")
             return 2

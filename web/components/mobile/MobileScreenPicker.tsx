@@ -18,6 +18,7 @@ export function MobileScreenPicker({
     /^\/matches\/\d+/.test(pathname)
     || /^\/teams\/\d+/.test(pathname)
     || /^\/players\/\d+/.test(pathname)
-    || /^\/leagues\/\d+/.test(pathname);
+    || /^\/leagues\/\d+/.test(pathname)
+    || /^\/countries\/\d+/.test(pathname);
   return <>{isDetail ? detail : rail}</>;
 }

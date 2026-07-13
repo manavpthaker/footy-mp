@@ -5,7 +5,7 @@ import { TeamClient } from "./TeamClient";
 import {
   getTeam, getLeague, upcomingForTeams, recentResultsForTeams,
   latestRatingForTeam, playersOnTeam, formLast5, factorsForTeam,
-  listFollows,
+  listFollows, keyPlayerIds,
 } from "@/lib/data";
 import { FollowToggle } from "@/components/mobile/FollowToggle";
 import { flagFor } from "@/lib/format";
@@ -17,7 +17,7 @@ export default async function TeamDetail({ params }: { params: { id: string } })
   const team = await getTeam(id);
   if (!team) notFound();
 
-  const [league, upcoming, results, rating, players, form, factors, follows] = await Promise.all([
+  const [league, upcoming, results, rating, players, form, factors, follows, keyIds] = await Promise.all([
     team.league_id ? getLeague(team.league_id) : Promise.resolve(null),
     upcomingForTeams([id], 10),
     recentResultsForTeams([id], 12),
@@ -26,6 +26,7 @@ export default async function TeamDetail({ params }: { params: { id: string } })
     formLast5(id),
     factorsForTeam(id),
     listFollows(),
+    keyPlayerIds(id),
   ]);
   const followed = follows.some(f => f.entity_type === "team" && f.entity_id === id);
 
@@ -46,6 +47,7 @@ export default async function TeamDetail({ params }: { params: { id: string } })
         form={form}
         factors={factors}
         players={JSON.parse(JSON.stringify(players))}
+        keyPlayerIds={keyIds}
         upcoming={JSON.parse(JSON.stringify(upcoming))}
         results={JSON.parse(JSON.stringify(results))}
         followedTeamIds={[id]}

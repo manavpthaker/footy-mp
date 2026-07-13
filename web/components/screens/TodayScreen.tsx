@@ -13,9 +13,11 @@ import { PlayerStatRow } from "@/components/ds";
 import {
   loadFollowedEntities, upcomingForTeams, recentResultsForTeams,
   liveMatches, upcomingAll, MODEL_VERSION,
+  seasonTotalsForPlayers, countriesByIds,
 } from "@/lib/data";
 import { flagFor, competitionCode, competitionTone } from "@/lib/format";
-import type { RichMatch } from "@/lib/data";
+import type { RichMatch, PlayerAgg } from "@/lib/data";
+import type { Player, Country } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +26,13 @@ export default async function TodayScreen() {
   const followedTeamIds = new Set<number>(teams.map(t => t.id));
   players.forEach(p => p.team_id && followedTeamIds.add(p.team_id));
 
-  const [live, allUpcoming, yoursUpcoming, yoursResults] = await Promise.all([
+  const [live, allUpcoming, yoursUpcoming, yoursResults, playerTotals, playerCountries] = await Promise.all([
     liveMatches(),
     upcomingAll(60),
     upcomingForTeams(Array.from(followedTeamIds), 20),
     recentResultsForTeams(Array.from(followedTeamIds), 6),
+    seasonTotalsForPlayers(players.map(p => p.id)),
+    countriesByIds(players.map(p => p.country_id).filter((x): x is number => x != null)),
   ]);
   const yours = yoursUpcoming.filter(m => m.status === "scheduled");
   const wcKnockout = allUpcoming
@@ -87,7 +91,11 @@ export default async function TodayScreen() {
             {players.length > 0 && (
               <>
                 <SectionHeading tick="var(--gold)">Your players</SectionHeading>
-                {players.map(p => <PlayerRow key={p.id} p={p} />)}
+                {players.map(p => (
+                  <PlayerRow key={p.id} p={p}
+                    agg={playerTotals[p.id] ?? null}
+                    country={p.country_id ? playerCountries[p.country_id] ?? null : null} />
+                ))}
               </>
             )}
           </div>
@@ -233,18 +241,18 @@ function TeamHero({ name }: { name: string }) {
   );
 }
 
-function PlayerRow({ p }: { p: any }) {
+function PlayerRow({ p, agg, country }: { p: Player; agg: PlayerAgg | null; country: Country | null }) {
   return (
     <Link href={`/players/${p.id}`} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
       <PlayerStatRow
-        flag={flagFor(undefined, "COL")}
+        flag={flagFor(country?.name, country?.fifa_code)}
         name={p.name}
         meta={p.position ?? "—"}
         followed={true}
         figures={[
-          { value: "—", label: "G" },
-          { value: "—", label: "A" },
-          { value: "—", label: "MIN" },
+          { value: agg ? String(agg.goals) : "—", label: "G" },
+          { value: agg ? String(agg.assists) : "—", label: "A" },
+          { value: agg ? String(agg.minutes) : "—", label: "MIN" },
         ]}
       />
     </Link>

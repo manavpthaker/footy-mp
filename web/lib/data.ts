@@ -6,7 +6,7 @@
 import { server, Team, Player, League, Country, Match, Prediction, Follow, ModelRating, EntityType } from "./supabase";
 
 export const USER_ID = "mp";
-export const MODEL_VERSION = "footy-mp-v1";
+export const MODEL_VERSION = "footy-mp-v2";
 
 // ---------- Follows ----------
 
@@ -151,6 +151,29 @@ export async function getCountry(id: number): Promise<Country | null> {
   const s = await server();
   const { data } = await s.from("countries").select("*").eq("id", id).maybeSingle();
   return (data ?? null) as Country | null;
+}
+
+export async function nationalTeamForCountry(countryId: number): Promise<Team | null> {
+  const s = await server();
+  const { data } = await s
+    .from("teams").select("*")
+    .eq("country_id", countryId).eq("is_national", true)
+    .limit(1).maybeSingle();
+  return (data ?? null) as Team | null;
+}
+
+export async function leaguesForCountry(countryId: number): Promise<League[]> {
+  const s = await server();
+  const { data } = await s.from("leagues").select("*").eq("country_id", countryId);
+  return (data ?? []) as League[];
+}
+
+export async function countriesByIds(ids: number[]): Promise<Record<number, Country>> {
+  const clean = Array.from(new Set(ids.filter(Boolean)));
+  if (!clean.length) return {};
+  const s = await server();
+  const { data } = await s.from("countries").select("*").in("id", clean);
+  return Object.fromEntries(((data ?? []) as Country[]).map(c => [c.id, c]));
 }
 
 export async function latestRatingForTeam(id: number): Promise<ModelRating | null> {
@@ -330,8 +353,7 @@ export async function tableableLeagues(): Promise<League[]> {
   const { data } = await s
     .from("leagues")
     .select("*")
-    .in("name", ["Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"])
-    .is("country_id", null);
+    .in("name", ["Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"]);
   return (data ?? []) as League[];
 }
 
@@ -356,6 +378,155 @@ export async function factorsForTeam(teamId: number): Promise<Array<{ label: str
 
 function round2(x: number) {
   return Math.round(x * 100) / 100;
+}
+
+// ---------- Player match stats (Understat via the ETL) ----------
+
+export interface PlayerAgg {
+  matches: number; minutes: number; goals: number; assists: number; xg: number; xa: number;
+}
+
+export interface PlayerMatchLine {
+  matchId: number;
+  date: string;            // YYYY-MM-DD
+  opponent: string;
+  home: boolean;
+  competition?: string;
+  minutes: number | null; goals: number | null; assists: number | null;
+  xg: number | null; xa: number | null;
+}
+
+/** European-season boundary: seasons run Aug -> May. */
+export function seasonStartIso(): string {
+  const now = new Date();
+  const y = now.getUTCMonth() + 1 >= 8 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  return `${y}-08-01T00:00:00Z`;
+}
+
+type PmsRow = {
+  match_id: number; player_id: number;
+  minutes: number | null; goals: number | null; assists: number | null;
+  xg: number | string | null; xa: number | string | null;
+};
+
+function emptyAgg(): PlayerAgg {
+  return { matches: 0, minutes: 0, goals: 0, assists: 0, xg: 0, xa: 0 };
+}
+
+function addRow(agg: PlayerAgg, r: PmsRow) {
+  agg.matches += 1;
+  agg.minutes += r.minutes ?? 0;
+  agg.goals += r.goals ?? 0;
+  agg.assists += r.assists ?? 0;
+  agg.xg += Number(r.xg ?? 0);
+  agg.xa += Number(r.xa ?? 0);
+}
+
+/** Current-season totals for a set of players (list rows on Today/Following). */
+export async function seasonTotalsForPlayers(playerIds: number[]): Promise<Record<number, PlayerAgg>> {
+  if (!playerIds.length) return {};
+  const s = await server();
+  const { data } = await s.from("player_match_stats").select("*").in("player_id", playerIds);
+  const rows = (data ?? []) as PmsRow[];
+  if (!rows.length) return {};
+  const matchIds = Array.from(new Set(rows.map(r => r.match_id)));
+  const kickoff: Record<number, string> = {};
+  for (let i = 0; i < matchIds.length; i += 500) {
+    const { data: ms } = await s.from("matches").select("id,kickoff_utc").in("id", matchIds.slice(i, i + 500));
+    for (const m of (ms ?? []) as Array<{ id: number; kickoff_utc: string }>) kickoff[m.id] = m.kickoff_utc;
+  }
+  const start = seasonStartIso();
+  const out: Record<number, PlayerAgg> = {};
+  for (const r of rows) {
+    const k = kickoff[r.match_id];
+    if (!k || k < start) continue;
+    addRow(out[r.player_id] ??= emptyAgg(), r);
+  }
+  return out;
+}
+
+/** Everything the player detail screen needs: season + World Cup totals and a match log. */
+export async function playerStatBlocks(playerId: number, logLimit = 10): Promise<{
+  season: PlayerAgg | null; worldCup: PlayerAgg | null; log: PlayerMatchLine[];
+}> {
+  const s = await server();
+  const { data } = await s.from("player_match_stats").select("*").eq("player_id", playerId);
+  const rows = (data ?? []) as Array<PmsRow & { team_id: number | null }>;
+  if (!rows.length) return { season: null, worldCup: null, log: [] };
+
+  const matchIds = Array.from(new Set(rows.map(r => r.match_id)));
+  const matches: Record<number, Match> = {};
+  for (let i = 0; i < matchIds.length; i += 500) {
+    const { data: ms } = await s.from("matches").select("*").in("id", matchIds.slice(i, i + 500));
+    for (const m of (ms ?? []) as Match[]) matches[m.id] = m;
+  }
+  const teamIds = Array.from(new Set(
+    Object.values(matches).flatMap(m => [m.home_team_id, m.away_team_id])));
+  const leagueIds = Array.from(new Set(
+    Object.values(matches).map(m => m.league_id).filter((x): x is number => x !== null)));
+  const [teamsRes, leaguesRes] = await Promise.all([
+    s.from("teams").select("id,name").in("id", teamIds),
+    leagueIds.length ? s.from("leagues").select("id,name").in("id", leagueIds) : Promise.resolve({ data: [] }),
+  ]);
+  const teamName = new Map((teamsRes.data ?? []).map((t: any) => [t.id as number, t.name as string]));
+  const leagueName = new Map(((leaguesRes.data ?? []) as any[]).map(l => [l.id as number, l.name as string]));
+
+  const start = seasonStartIso();
+  const season = emptyAgg();
+  const worldCup = emptyAgg();
+  const lines: PlayerMatchLine[] = [];
+  for (const r of rows) {
+    const m = matches[r.match_id];
+    if (!m) continue;
+    const comp = m.league_id ? leagueName.get(m.league_id) : undefined;
+    if (comp === "World Cup") addRow(worldCup, r);
+    if ((m.kickoff_utc ?? "") >= start) addRow(season, r);
+    const home = r.team_id != null ? m.home_team_id === r.team_id : false;
+    lines.push({
+      matchId: m.id,
+      date: (m.kickoff_utc ?? "").slice(0, 10),
+      opponent: teamName.get(home ? m.away_team_id : m.home_team_id) ?? "—",
+      home,
+      competition: comp,
+      minutes: r.minutes, goals: r.goals, assists: r.assists,
+      xg: r.xg == null ? null : Number(r.xg), xa: r.xa == null ? null : Number(r.xa),
+    });
+  }
+  lines.sort((a, b) => (a.date < b.date ? 1 : -1));
+  return {
+    season: season.matches ? season : null,
+    worldCup: worldCup.matches ? worldCup : null,
+    log: lines.slice(0, logLimit),
+  };
+}
+
+/** Top players on a team this season by goal involvement (for the squad "key" badge). */
+export async function keyPlayerIds(teamId: number, top = 2): Promise<number[]> {
+  const s = await server();
+  const { data } = await s.from("player_match_stats").select("*").eq("team_id", teamId);
+  const rows = (data ?? []) as Array<PmsRow & { team_id: number | null }>;
+  if (!rows.length) return [];
+  const matchIds = Array.from(new Set(rows.map(r => r.match_id)));
+  const kickoff: Record<number, string> = {};
+  for (let i = 0; i < matchIds.length; i += 500) {
+    const { data: ms } = await s.from("matches").select("id,kickoff_utc").in("id", matchIds.slice(i, i + 500));
+    for (const m of (ms ?? []) as Array<{ id: number; kickoff_utc: string }>) kickoff[m.id] = m.kickoff_utc;
+  }
+  const start = seasonStartIso();
+  const score: Record<number, number> = {};
+  const mins: Record<number, number> = {};
+  for (const r of rows) {
+    const k = kickoff[r.match_id];
+    if (!k || k < start) continue;
+    score[r.player_id] = (score[r.player_id] ?? 0)
+      + (r.goals ?? 0) + (r.assists ?? 0) + 0.5 * Number(r.xg ?? 0) + 0.5 * Number(r.xa ?? 0);
+    mins[r.player_id] = (mins[r.player_id] ?? 0) + (r.minutes ?? 0);
+  }
+  return Object.keys(score)
+    .map(Number)
+    .filter(id => (mins[id] ?? 0) >= 450) // ~5 full matches: no one-cameo wonders
+    .sort((a, b) => score[b] - score[a])
+    .slice(0, top);
 }
 
 /** Poisson score matrix from two expected-goal lambdas. */

@@ -11,6 +11,10 @@ Modes (env var PIPELINE_MODE, or CLI arg):
                 Exits early (0) when no match is live or within ±3h of kickoff,
                 so the 15-minute cron is nearly free outside matchdays.
     seed      — one-time: create the follows list from data/seed_follows.py.
+    players   — Understat player-match stats (minutes/goals/xG/xA) for the big-5.
+                Controlled by PIPELINE_PLAYER_SEASONS (default: current season).
+                Slow uncached (~1 request per match), cheap once soccerdata's disk
+                cache is warm.
     model     — Phase 2 hook: run the model pipeline after ingest.
     backtest  — walk-forward backtest vs the goals-only baseline; exits non-zero
                 if the xG model does not beat the baseline on RPS and log-loss.
@@ -182,14 +186,17 @@ def _understat_league_to_ours(name) -> str | None:
 
 def _find_or_create_match(league_id: int, home_id: int, away_id: int,
                           date_str: str, home_goals=None, away_goals=None) -> int | None:
-    """Match Understat row -> ESPN-created match by (league, date::date, home, away).
-    If no ESPN match exists yet, create a placeholder we can enrich later."""
+    """Match Understat row -> ESPN-created match by (league, home, away) within
+    ±1 day of Understat's local match date (UTC kickoffs can drift a day).
+    If no ESPN match exists yet, create a placeholder; ESPN ingest later claims
+    it via db._claim_placeholder and overwrites kickoff/status."""
     if not date_str:
         return None
-    # look up matches on the given calendar date
     c = db.client()
-    day_start = f"{date_str}T00:00:00Z"
-    day_end = f"{date_str}T23:59:59Z"
+    from datetime import date as _date
+    d = _date.fromisoformat(date_str[:10])
+    day_start = f"{d - timedelta(days=1)}T00:00:00Z"
+    day_end = f"{d + timedelta(days=1)}T23:59:59Z"
     hits = getattr(
         c.table("matches").select("id,kickoff_utc,home_team_id,away_team_id,status")
         .eq("league_id", league_id).eq("home_team_id", home_id).eq("away_team_id", away_id)
@@ -216,10 +223,114 @@ def _to_int(v):
         return None
 
 
+def _to_num(v):
+    try:
+        f = float(v)
+        return f if f == f else None  # NaN guard (pandas)
+    except (TypeError, ValueError):
+        return None
+
+
+# -------------------------- player-stats ingest (Understat) --------------------------
+
+def ingest_player_stats(seasons: list[str], leagues: list[str] | None = None) -> int:
+    """Player-level match stats (minutes, goals, assists, xG/xA, shots, key passes,
+    cards) from Understat into `players` + `player_match_stats`. Big-5 leagues only
+    (Understat's coverage). FBref was the original plan but blocks scrapers; Understat
+    serves the same fields politely via soccerdata. Teams are looked up, never
+    created, so a bad alias can't spawn duplicate teams — unmatched names are logged
+    for the alias map."""
+    from data.ingest import stats
+    leagues = leagues or ["Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"]
+    league_ids = _ensure_leagues(leagues)
+    codes = {n: LEAGUE_SOURCES[n][1] for n in leagues if LEAGUE_SOURCES[n][1]}
+    if not codes:
+        return 0
+
+    # preload caches: one round-trip each instead of one per stat row
+    team_cache: dict[tuple[str, int], int | None] = {}
+    player_cache: dict[tuple[str, int], int] = {}
+    for p in db.page_all("players", "id,name,team_id"):
+        if p.get("team_id"):
+            player_cache[(p["name"], p["team_id"])] = p["id"]
+    match_index: dict[tuple[int, str], int] = {}
+    for m in db.page_all("matches", "id,home_team_id,away_team_id,kickoff_utc"):
+        day = (m.get("kickoff_utc") or "")[:10]
+        if not day:
+            continue
+        match_index[(m["home_team_id"], day)] = m["id"]
+        match_index[(m["away_team_id"], day)] = m["id"]
+
+    def _find_match(team_id: int, date_str: str) -> int | None:
+        d = datetime.fromisoformat(date_str).date()
+        for delta in (0, 1, -1):
+            hit = match_index.get((team_id, str(d + timedelta(days=delta))))
+            if hit:
+                return hit
+        return None
+
+    written = 0
+    unmatched: set[str] = set()
+    for season in seasons:
+        try:
+            recs = stats.understat_player_match(leagues=codes, seasons=(season,))
+        except Exception as e:
+            print(f"[players] season {season} failed: {e}")
+            continue
+        batch: list[dict] = []
+        for r in recs:
+            league_name = _understat_league_to_ours(r.get("league"))
+            if not league_name or league_name not in league_ids or not r.get("date"):
+                continue
+            lid = league_ids[league_name]
+            team = canonical_team(r.get("team"))
+            key = (team, lid)
+            if key not in team_cache:
+                team_cache[key] = db.find_team(team, lid)
+            team_id = team_cache[key]
+            if not team_id:
+                unmatched.add(str(r.get("team")))
+                continue
+            match_id = _find_match(team_id, r["date"])
+            if not match_id:
+                continue
+            pname = str(r.get("player") or "").strip()
+            if not pname:
+                continue
+            pkey = (pname, team_id)
+            if pkey not in player_cache:
+                pos = str(r.get("position") or "") or None
+                us_id = str(r.get("understat_id") or "") or None
+                player_cache[pkey] = db.get_or_create_player(
+                    pname, team_id=team_id, position=pos, understat_id=us_id)
+            batch.append({
+                "match_id": match_id, "player_id": player_cache[pkey], "team_id": team_id,
+                "minutes": _to_int(r.get("minutes")), "goals": _to_int(r.get("goals")),
+                "assists": _to_int(r.get("assists")), "xg": _to_num(r.get("xg")),
+                "xa": _to_num(r.get("xa")),
+                "shots": _to_int(r.get("shots")),
+                "key_passes": _to_int(r.get("key_passes")),
+                "yellow": _to_int(r.get("yellow")), "red": _to_int(r.get("red")),
+            })
+            if len(batch) >= 500:
+                db.upsert_player_match_stats(batch)
+                written += len(batch)
+                batch = []
+        if batch:
+            db.upsert_player_match_stats(batch)
+            written += len(batch)
+        print(f"[players] season {season}: {written} player-match rows so far")
+    if unmatched:
+        print(f"[players] unmatched team names (extend TEAM_ALIASES): {sorted(unmatched)}")
+    return written
+
+
 # -------------------------- follows seed --------------------------
 
 def seed_follows() -> None:
+    from data.seed_countries import seed_countries
     from data.seed_follows import seed
+    seed_countries()
     seed()
 
 
@@ -268,6 +379,11 @@ def main() -> int:
             ingest_understat(seasons)
         elif mode == "seed":
             seed_follows()
+        elif mode == "players":
+            seasons = [s.strip() for s in (os.environ.get("PIPELINE_PLAYER_SEASONS")
+                       or _current_understat_season()).split(",") if s.strip()]
+            n = ingest_player_stats(seasons)
+            print(f"[pipeline] players done: {n} player-match rows")
         elif mode == "model":
             from data.model.pipeline import run as run_model
             run_model()

@@ -20,9 +20,13 @@ on:
         description: "Pipeline mode"
         type: choice
         default: daily
-        options: [daily, live, backfill, seed, model, backtest]
+        options: [daily, live, backfill, seed, model, backtest, players]
       backfill_seasons:
         description: "Understat season codes for backfill mode (comma-separated)"
+        required: false
+        default: ""
+      player_seasons:
+        description: "Season codes for players mode (comma-separated, default: current)"
         required: false
         default: ""
 
@@ -44,6 +48,12 @@ jobs:
           cache-dependency-path: data/requirements.txt
       - name: Install deps
         run: pip install -r data/requirements.txt
+      - name: Cache soccerdata (Understat/FBref pages)
+        uses: actions/cache@v4
+        with:
+          path: ~/soccerdata
+          key: soccerdata-${{ github.run_id }}
+          restore-keys: soccerdata-
       - name: Ingest (ESPN + Understat)
         run: python -m data.pipeline daily
       - name: Model (ratings + predictions)
@@ -78,7 +88,14 @@ jobs:
           cache-dependency-path: data/requirements.txt
       - name: Install deps
         run: pip install -r data/requirements.txt
+      - name: Cache soccerdata (Understat/FBref pages)
+        uses: actions/cache@v4
+        with:
+          path: ~/soccerdata
+          key: soccerdata-${{ github.run_id }}
+          restore-keys: soccerdata-
       - name: Run ${{ inputs.mode }}
         env:
           PIPELINE_BACKFILL_SEASONS: ${{ inputs.backfill_seasons }}
+          PIPELINE_PLAYER_SEASONS: ${{ inputs.player_seasons }}
         run: python -m data.pipeline ${{ inputs.mode }}

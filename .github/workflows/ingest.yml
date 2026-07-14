@@ -20,7 +20,7 @@ on:
         description: "Pipeline mode"
         type: choice
         default: daily
-        options: [daily, live, backfill, seed, model, backtest, players]
+        options: [daily, live, backfill, seed, model, backtest, players, lowdown]
       backfill_seasons:
         description: "Understat season codes for backfill mode (comma-separated)"
         required: false
@@ -58,6 +58,10 @@ jobs:
         run: python -m data.pipeline daily
       - name: Model (ratings + predictions)
         run: python -m data.pipeline model
+      - name: Lowdown (match commentary)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python -m data.pipeline lowdown   # skips gracefully when the key isn't set
 
   live:
     # every 15 minutes; data/pipeline.py exits 0 early outside match windows
@@ -98,4 +102,5 @@ jobs:
         env:
           PIPELINE_BACKFILL_SEASONS: ${{ inputs.backfill_seasons }}
           PIPELINE_PLAYER_SEASONS: ${{ inputs.player_seasons }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python -m data.pipeline ${{ inputs.mode }}

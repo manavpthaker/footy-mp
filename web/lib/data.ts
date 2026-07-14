@@ -153,6 +153,27 @@ export async function getCountry(id: number): Promise<Country | null> {
   return (data ?? null) as Country | null;
 }
 
+// ---------- The Lowdown ----------
+
+export interface Lowdown {
+  match_id: number;
+  version: string;
+  paragraphs: string[];
+  verdict: string | null;
+  generated_at: string;
+}
+
+export const LOWDOWN_VERSION = "lowdown-v1";
+
+export async function getLowdown(matchId: number): Promise<Lowdown | null> {
+  const s = await server();
+  const { data } = await s
+    .from("lowdowns").select("*")
+    .eq("match_id", matchId).eq("version", LOWDOWN_VERSION)
+    .maybeSingle();
+  return (data ?? null) as Lowdown | null;
+}
+
 export async function nationalTeamForCountry(countryId: number): Promise<Team | null> {
   const s = await server();
   const { data } = await s

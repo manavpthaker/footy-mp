@@ -18,6 +18,9 @@ Modes (env var PIPELINE_MODE, or CLI arg):
     model     — Phase 2 hook: run the model pipeline after ingest.
     backtest  — walk-forward backtest vs the goals-only baseline; exits non-zero
                 if the xG model does not beat the baseline on RPS and log-loss.
+    lowdown   — LLM-written match commentary ("The Lowdown") for upcoming
+                matches with predictions. Needs ANTHROPIC_API_KEY (skips
+                gracefully without it). PIPELINE_LOWDOWN_LIMIT caps matches.
 
 Idempotent. Safe to re-run at any cadence.
 """
@@ -388,6 +391,9 @@ def main() -> int:
         elif mode == "model":
             from data.model.pipeline import run as run_model
             run_model()
+        elif mode == "lowdown":
+            from data import lowdown
+            lowdown.run()
         elif mode == "backtest":
             from data.model import backtest
             res = backtest.run()

@@ -135,7 +135,8 @@ footy-mp/
     styles/                  <- Quant Desk tokens (colors/fonts/spacing/typography)
   data/                      <- Python ETL + model
     db/schema.sql
-    pipeline.py              <- orchestrator; modes: daily/live/backfill/players/seed/model/backtest
+    pipeline.py              <- orchestrator; modes: daily/live/backfill/players/seed/model/backtest/lowdown
+    lowdown.py               <- "The Lowdown": dossier -> 4 analyst agents -> synthesizer (WC26 voice)
     ingest/espn.py           <- fixtures/results/live/shootouts (no key needed)
     ingest/stats.py          <- Understat xG + player-match stats via soccerdata
     model/engine.py          <- xG Dixon-Coles + per-league HFA + ET/pens cascade

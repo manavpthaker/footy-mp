@@ -14,7 +14,7 @@ import { ScorelineGrid } from "@/components/ds";
 import { FormPills } from "@/components/ds";
 // @ts-ignore
 import { FactorBar } from "@/components/ds";
-import { getMatch, formLast5, factorsForTeam, poissonMatrix } from "@/lib/data";
+import { getMatch, formLast5, factorsForTeam, poissonMatrix, getLowdown, MODEL_VERSION } from "@/lib/data";
 import { flagFor, shortNameFor, competitionCode } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -24,11 +24,12 @@ export default async function MatchDetail({ params }: { params: { id: string } }
   const m = await getMatch(id);
   if (!m) notFound();
 
-  const [homeForm, awayForm, homeFactors, awayFactors] = await Promise.all([
+  const [homeForm, awayForm, homeFactors, awayFactors, lowdown] = await Promise.all([
     formLast5(m.home_team_id),
     formLast5(m.away_team_id),
     factorsForTeam(m.home_team_id),
     factorsForTeam(m.away_team_id),
+    getLowdown(id),
   ]);
 
   const isFinal = m.status === "final";
@@ -95,7 +96,7 @@ export default async function MatchDetail({ params }: { params: { id: string } }
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
               <StatCard label="expected goals"
                 value={`${Number(pred.home_xg ?? 0).toFixed(2)}–${Number(pred.away_xg ?? 0).toFixed(2)}`} />
-              <StatCard label="model" value="v1" unit=" · xG Dixon-Coles" />
+              <StatCard label="model" value={MODEL_VERSION.replace("footy-mp-", "")} unit=" · xG Dixon-Coles" />
             </div>
             {verdict && (
               <div style={{
@@ -104,6 +105,31 @@ export default async function MatchDetail({ params }: { params: { id: string } }
                 background: "var(--surface-tint)", borderRadius: "var(--radius-md)",
                 fontSize: "var(--fs-sm)", color: "var(--text-muted)",
               }}>{verdict}</div>
+            )}
+
+            {lowdown && lowdown.paragraphs.length > 0 && (
+              <>
+                <SectionHeading tick="var(--accent)">The lowdown</SectionHeading>
+                <div style={{
+                  background: "var(--surface-panel)", border: "1px solid var(--border)",
+                  borderLeft: "3px solid var(--accent-2)",
+                  borderRadius: "0 var(--radius-xl) var(--radius-xl) 0",
+                  padding: "13px 16px",
+                }}>
+                  {lowdown.verdict && (
+                    <p style={{
+                      margin: "0 0 9px", fontSize: "var(--fs-sm)", lineHeight: 1.65,
+                      fontWeight: 700, color: "var(--text-primary)",
+                    }}>📋 {lowdown.verdict}</p>
+                  )}
+                  {lowdown.paragraphs.map((p, i) => (
+                    <p key={i} style={{
+                      margin: i ? "9px 0 0" : 0, fontSize: "var(--fs-sm)",
+                      lineHeight: 1.65, color: "var(--text-muted)",
+                    }}>{p}</p>
+                  ))}
+                </div>
+              </>
             )}
 
             {pred.home_xg != null && pred.away_xg != null && (

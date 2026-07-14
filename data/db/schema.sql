@@ -162,3 +162,15 @@ create table if not exists backtest_runs (
   advance_acc   numeric,
   run_at        timestamptz default now()
 );
+
+-- "the lowdown" — LLM-written match commentary grounded in the model + stats
+create table if not exists lowdowns (
+  id           bigint generated always as identity primary key,
+  match_id     bigint not null references matches(id) on delete cascade,
+  version      text not null,                -- lowdown pipeline version, e.g. 'lowdown-v1'
+  paragraphs   jsonb not null,               -- ordered array of paragraph strings
+  verdict      text,                         -- the bold one-line call
+  inputs_hash  text not null,                -- hash of the dossier; skip regen when unchanged
+  generated_at timestamptz not null default now(),
+  unique (match_id, version)
+);

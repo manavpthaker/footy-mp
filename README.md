@@ -16,7 +16,8 @@ free data (ESPN + Understat via soccerdata) · Quant Desk design system.
 ARCHITECTURE.md            design + decisions
 data/
   db/schema.sql            Supabase schema
-  pipeline.py              orchestrator — modes: daily/live/backfill/players/seed/model/backtest
+  pipeline.py              orchestrator — modes: daily/live/backfill/players/seed/model/backtest/lowdown
+  lowdown.py               "The Lowdown" — multi-agent LLM match commentary (Claude API)
   ingest/espn.py           fixtures / results / live / shootouts  (works, no key)
   ingest/stats.py          xG + player-match stats via soccerdata (Understat)
   model/engine.py          xG Dixon-Coles + per-league HFA + ET/pens cascade + nerves

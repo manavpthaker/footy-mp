@@ -2,6 +2,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { RefreshButton } from "./RefreshButton";
 
 const TABS = [
   { id: "today",     glyph: "◆", label: "Today",     href: "/" },
@@ -74,7 +75,8 @@ export function AppHeader() {
           })}
         </nav>
         <div style={{ flex: 1 }} />
-        <div style={{
+        <RefreshButton />
+        <div className="fmp-desktop-only" style={{
           fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
           fontSize: "var(--fs-2xs)", textTransform: "uppercase",
           letterSpacing: "var(--tracking-label)", color: "var(--text-faint)",

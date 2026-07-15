@@ -51,6 +51,13 @@ export function shortNameFor(name: string, fifa?: string | null): string {
   return name.slice(0, 3).toUpperCase();
 }
 
+/** Bracket placeholders ("Semifinal 1 Winner") aren't real teams — model
+ *  numbers against them are noise and should not be rendered. */
+export function isPlaceholderTeam(name?: string | null): boolean {
+  if (!name) return true;
+  return /(winner|loser|tbd)/i.test(name);
+}
+
 export function competitionTone(name: string): "gold" | "sky" | "pitch" | "neutral" {
   if (name === "World Cup" || name === "Champions League" || name === "Euros" || name === "Copa America") return "gold";
   if (name === "Premier League" || name === "La Liga" || name === "Serie A"

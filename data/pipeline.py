@@ -376,6 +376,10 @@ def main() -> int:
                 print("[pipeline] live: no live matches or kickoffs within ±3h — skipping")
                 return 0
             ingest_espn(days_back=1, days_fwd=1)
+            # refresh in-game lowdowns (regenerates only when score/period moved;
+            # skips gracefully when ANTHROPIC_API_KEY isn't set)
+            from data import lowdown
+            lowdown.run(states=("live",))
         elif mode == "backfill":
             seasons = [s.strip() for s in (os.environ.get("PIPELINE_BACKFILL_SEASONS")
                        or "2223,2324,2425,2526").split(",") if s.strip()]

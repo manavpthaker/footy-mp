@@ -15,7 +15,7 @@ import { FormPills } from "@/components/ds";
 // @ts-ignore
 import { FactorBar } from "@/components/ds";
 import { getMatch, formLast5, factorsForTeam, poissonMatrix, getLowdown, MODEL_VERSION } from "@/lib/data";
-import { flagFor, shortNameFor, competitionCode } from "@/lib/format";
+import { flagFor, shortNameFor, competitionCode, isPlaceholderTeam } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +37,8 @@ export default async function MatchDetail({ params }: { params: { id: string } }
   const kick = new Date(m.kickoff_utc);
   const home = m.home_team; const away = m.away_team;
   const compName = m.league?.name ?? "";
-  const pred = m.prediction;
+  const placeholder = isPlaceholderTeam(home?.name) || isPlaceholderTeam(away?.name);
+  const pred = placeholder ? undefined : m.prediction;
   const pH = pred?.p_home != null ? Math.round(Number(pred.p_home) * 100) : null;
   const pD = pred?.p_draw != null ? Math.round(Number(pred.p_draw) * 100) : null;
   const pA = pH != null && pD != null ? 100 - pH - pD : null;
@@ -109,7 +110,11 @@ export default async function MatchDetail({ params }: { params: { id: string } }
 
             {lowdown && lowdown.paragraphs.length > 0 && (
               <>
-                <SectionHeading tick="var(--accent)">The lowdown</SectionHeading>
+                <SectionHeading tick={lowdown.state === "live" ? "var(--status-live)" : "var(--accent)"}>
+                  {lowdown.state === "live" ? "The lowdown · live"
+                    : lowdown.state === "post" ? "The lowdown · full time"
+                    : "The lowdown"}
+                </SectionHeading>
                 <div style={{
                   background: "var(--surface-panel)", border: "1px solid var(--border)",
                   borderLeft: "3px solid var(--accent-2)",

@@ -158,6 +158,7 @@ export async function getCountry(id: number): Promise<Country | null> {
 export interface Lowdown {
   match_id: number;
   version: string;
+  state: "pre" | "live" | "post";
   paragraphs: string[];
   verdict: string | null;
   generated_at: string;
@@ -308,7 +309,9 @@ export async function standingsForLeague(leagueId: number): Promise<{ league: Le
   if (!league) return { league: null, rows: [] };
   const s = await server();
   const [matchesRes, teamsRes, followsRes] = await Promise.all([
-    s.from("matches").select("*").eq("league_id", leagueId).eq("status", "final"),
+    // season-scoped: a table is one season, not the whole match archive
+    s.from("matches").select("*").eq("league_id", leagueId).eq("status", "final")
+      .gte("kickoff_utc", seasonStartIso()),
     s.from("teams").select("*").eq("league_id", leagueId),
     s.from("follows").select("*").eq("user_id", USER_ID).eq("entity_type", "team"),
   ]);

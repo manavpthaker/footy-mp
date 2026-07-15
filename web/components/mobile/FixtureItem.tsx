@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 // @ts-ignore  — DS JSX with permissive prop types
 import { MatchRow } from "@/components/ds";
 import { MiniProb, mono } from "./primitives";
+import { isPlaceholderTeam } from "@/lib/format";
 import type { RichMatch } from "@/lib/data";
 
 /**
@@ -80,7 +81,8 @@ export function FixtureItem({
         ● {m.minute ?? 0}′
       </span>
     </div>
-  ) : m.prediction && m.prediction.p_home != null ? (
+  ) : m.prediction && m.prediction.p_home != null
+      && !isPlaceholderTeam(homeTeam) && !isPlaceholderTeam(awayTeam) ? (
     <MiniProb pred={{
       h: Number(m.prediction.p_home),
       d: Number(m.prediction.p_draw ?? 0),

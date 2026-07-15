@@ -8,16 +8,23 @@ ex-pro, and a swaggering striker" — but feeds a multi-agent pipeline with the
 full footy-mp dataset: model ratings + predictions, per-match xG, player-level
 form, momentum trends, head-to-head, and knockout context.
 
+Three states, like the original (each match's row transitions in place):
+  pre  — the full preview: 4 analyst agents + synthesizer, 3-4 paragraphs.
+  live — in-game read: synthesizer only (fast/cheap, regenerated as the
+         score changes or every ~20 game minutes), 1-2 paragraphs.
+  post — the full-time verdict: did the model's read land or eat crow,
+         2-3 paragraphs. Written once, then stable.
+
 Flow per match:
   1. build_dossier()  — pure data pull from Supabase, no LLM.
-  2. analyst agents   — four focused passes (each team, players/matchups,
-                        momentum/stakes) that turn numbers into insights.
-  3. synthesizer      — writes 3-4 paragraphs + a bold verdict in the WC26
-                        voice, grounded ONLY in the dossier + analyst notes.
+  2. analyst agents   — four focused passes (pre-match only).
+  3. synthesizer      — paragraphs + a bold verdict in the WC26 voice,
+                        grounded ONLY in the dossier + analyst notes.
   4. upsert into `lowdowns` keyed on (match_id, version); an inputs hash
                         skips regeneration when nothing changed.
 
-Requires ANTHROPIC_API_KEY. Runs via `python -m data.pipeline lowdown`.
+Requires ANTHROPIC_API_KEY. Runs via `python -m data.pipeline lowdown`
+(all states) or from the live cron (live matches only).
 """
 from __future__ import annotations
 
@@ -158,6 +165,7 @@ def build_dossier(match: dict, teams: dict, leagues: dict,
                 "temper": float(r["temper"]) if r.get("temper") is not None else 0.0}
 
     pred = predictions.get(match["id"])
+    state = match_state(match)
     dossier = {
         "fixture": {
             "home": team_name.get(hid), "away": team_name.get(aid),
@@ -197,11 +205,40 @@ def build_dossier(match: dict, teams: dict, leagues: dict,
             "pens": f"{m['pens_home']}-{m['pens_away']}" if m.get("went_pens") else None,
         } for m in h2h[-5:]],
     }
+
+    if state == "live":
+        dossier["live"] = {
+            "score": f"{match.get('home_goals') or 0}-{match.get('away_goals') or 0}",
+            "minute": match.get("minute"),
+        }
+    elif state == "post":
+        dossier["result"] = {
+            "final_score": f"{match.get('home_goals')}-{match.get('away_goals')}",
+            "went_extra_time": bool(match.get("went_et")),
+            "penalties": f"{match.get('pens_home')}-{match.get('pens_away')}"
+                         if match.get("went_pens") else None,
+        }
     return dossier
 
 
+def match_state(match: dict) -> str:
+    if match.get("status") == "live":
+        return "live"
+    if match.get("status") == "final":
+        return "post"
+    return "pre"
+
+
 def dossier_hash(dossier: dict) -> str:
-    return hashlib.md5(json.dumps(dossier, sort_keys=True).encode()).hexdigest()
+    """Hash of everything that should trigger a regeneration. For live matches
+    the raw minute is bucketed (~20 game minutes) so the 15-minute cron doesn't
+    rewrite an unchanged game every tick."""
+    d = dict(dossier)
+    if "live" in d:
+        live = dict(d["live"])
+        live["minute"] = (live.get("minute") or 0) // 20
+        d = {**d, "live": live}
+    return hashlib.md5(json.dumps(d, sort_keys=True).encode()).hexdigest()
 
 
 # ------------------------------ agents ------------------------------
@@ -246,6 +283,43 @@ about the team, not imaginary players. Write for a reader who sees this next
 to the probability bars — do not re-list every probability, weave in the two
 or three that matter."""
 
+LIVE_SYSTEM = VOICE + """
+
+The match is LIVE. You are given the dossier including the current score and
+minute, plus the model's pre-match read. Write the in-game lowdown:
+
+- 1 or 2 paragraphs, 2-3 sentences each. Urgent, present tense.
+- Open with the state of the game: score, minute, who's on top.
+- Measure it against the pre-match read — is the favorite delivering, is the
+  underdog pulling something, what does the trailing side need and how long
+  have they got.
+- "verdict": ONE present-tense line on where this is heading.
+
+Hard rules: every number from the dossier. You know the score and minute —
+you do NOT know scorers, cards, or events, so never invent them. Talk about
+teams and the pre-match numbers, not imagined incidents."""
+
+POST_SYSTEM = VOICE + """
+
+Full time. You are given the dossier including the final result and the
+model's pre-match prediction. Write the post-match lowdown:
+
+- 2 or 3 paragraphs, 2-4 sentences each.
+- Paragraph 1: the result, plainly and with flavor — score, extra time or
+  penalties if they happened, what kind of result it reads as.
+- Paragraph 2: the model's reckoning — what the pre-match numbers said and
+  whether the read landed or ate crow. Be honest either way; if the model
+  priced the winner under 30%, say it got beat. If the favorite landed,
+  take the small victory lap.
+- Optional paragraph 3: what it means — who advances, form lines extended or
+  snapped, anything the data actually supports.
+- "verdict": ONE punchy line summarizing the result and whether the model
+  called it.
+
+Hard rules: every number from the dossier. You know the final score and
+whether it went to extra time or penalties — you do NOT know scorers or
+events, so never invent them."""
+
 
 def _client():
     import anthropic
@@ -275,12 +349,23 @@ LOWDOWN_SCHEMA = {
 }
 
 
-def generate_lowdown(dossier: dict) -> dict | None:
-    """Run the analyst agents + synthesizer for one match dossier."""
+def generate_lowdown(dossier: dict, state: str = "pre") -> dict | None:
+    """Run the pipeline for one match dossier. Pre-match gets the full analyst
+    panel; live and post are synthesizer-only (the dossier already carries the
+    numbers, and live regenerates too often to justify four extra calls)."""
     client = _client()
     d = json.dumps(dossier, indent=1)
     home = dossier["fixture"]["home"]
     away = dossier["fixture"]["away"]
+
+    if state in ("live", "post"):
+        system = LIVE_SYSTEM if state == "live" else POST_SYSTEM
+        prompt = (
+            f"Match: {home} vs {away} ({dossier['fixture'].get('competition')})\n\n"
+            f"DOSSIER (source of truth):\n{d}\n\n"
+            f"Write the {'in-game' if state == 'live' else 'post-match'} lowdown now."
+        )
+        return _synthesize(client, system, prompt, max_tokens=1200)
 
     analysts = {
         "home_team": f"Analyze {home} (the home side) only: their model ratings, "
@@ -309,12 +394,16 @@ def generate_lowdown(dossier: dict) -> dict | None:
         f"[momentum & stakes]\n{notes['momentum']}\n\n"
         f"Write the lowdown now."
     )
+    return _synthesize(client, SYNTH_SYSTEM, synth_prompt, max_tokens=2000)
+
+
+def _synthesize(client, system: str, prompt: str, max_tokens: int) -> dict | None:
     resp = client.messages.create(
         model=GEN_MODEL,
-        max_tokens=2000,
-        system=SYNTH_SYSTEM,
+        max_tokens=max_tokens,
+        system=system,
         output_config={"format": {"type": "json_schema", "schema": LOWDOWN_SCHEMA}},
-        messages=[{"role": "user", "content": synth_prompt}],
+        messages=[{"role": "user", "content": prompt}],
     )
     if resp.stop_reason == "refusal":
         return None
@@ -351,47 +440,71 @@ def _load_context():
     return teams, leagues, all_matches, all_stats, ratings, predictions
 
 
-def run(days_ahead: int = 7, limit: int | None = None) -> dict:
-    """Generate lowdowns for upcoming matches that have a prediction."""
+def _select_matches(all_matches, teams, predictions, days_ahead: int,
+                    states: tuple[str, ...]) -> list[dict]:
+    """Matches that deserve a lowdown right now, per requested states:
+    pre = scheduled within the horizon; live = live now; post = finished in
+    the last 72h. All must have a prediction and two real (non-placeholder)
+    teams."""
+    now = datetime.now(timezone.utc)
+    horizon = (now + timedelta(days=days_ahead)).isoformat()
+    lookback = (now - timedelta(hours=72)).isoformat()
+
+    def real_teams(m):
+        hn = teams.get(m["home_team_id"], {}).get("name", "")
+        an = teams.get(m["away_team_id"], {}).get("name", "")
+        return not any(w in (hn + an) for w in ("Winner", "Loser", "TBD"))
+
+    out = []
+    for m in all_matches:
+        if m["id"] not in predictions or not real_teams(m):
+            continue
+        ko = m.get("kickoff_utc") or ""
+        st = match_state(m)
+        if st not in states:
+            continue
+        if st == "pre" and not (now.isoformat() <= ko <= horizon):
+            continue
+        if st == "post" and not (lookback <= ko):
+            continue
+        out.append(m)
+    out.sort(key=lambda m: m.get("kickoff_utc") or "")
+    return out
+
+
+def run(days_ahead: int = 7, limit: int | None = None,
+        states: tuple[str, ...] = ("pre", "live", "post")) -> dict:
+    """Generate/refresh lowdowns. The daily job runs all states; the live cron
+    calls run(states=("live",)) so in-game reads update as scores change."""
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("[lowdown] ANTHROPIC_API_KEY not set — skipping (not an error)")
         return {"status": "skipped_no_key"}
 
     limit = limit or int(os.environ.get("PIPELINE_LOWDOWN_LIMIT") or 12)
     teams, leagues, all_matches, all_stats, ratings, predictions = _load_context()
+    candidates = _select_matches(all_matches, teams, predictions, days_ahead, states)[:limit]
+    print(f"[lowdown] {len(candidates)} candidate matches (states={','.join(states)})")
 
-    now = datetime.now(timezone.utc)
-    horizon = (now + timedelta(days=days_ahead)).isoformat()
-    upcoming = [m for m in all_matches
-                if m["status"] in ("scheduled", "live")
-                and m["id"] in predictions
-                and (m.get("kickoff_utc") or "") <= horizon
-                and (m.get("kickoff_utc") or "") >= (now - timedelta(hours=6)).isoformat()]
-    # placeholder teams ("Semifinal 1 Winner") make useless lowdowns — skip them
-    def real_teams(m):
-        hn = teams.get(m["home_team_id"], {}).get("name", "")
-        an = teams.get(m["away_team_id"], {}).get("name", "")
-        return not any(w in (hn + an) for w in ("Winner", "Loser", "TBD"))
-    upcoming = [m for m in upcoming if real_teams(m)]
-    upcoming.sort(key=lambda m: m.get("kickoff_utc") or "")
-    upcoming = upcoming[:limit]
-    print(f"[lowdown] {len(upcoming)} matches in the next {days_ahead}d with predictions")
-
-    existing = {(l["match_id"]): l for l in
-                db.page_all("lowdowns", "match_id,inputs_hash", version=LOWDOWN_VERSION)}
+    existing = {l["match_id"]: l for l in
+                db.page_all("lowdowns", "match_id,inputs_hash,state", version=LOWDOWN_VERSION)}
 
     written = skipped = failed = 0
-    for m in upcoming:
+    for m in candidates:
+        state = match_state(m)
         dossier = build_dossier(m, teams, leagues, all_matches, all_stats,
                                 ratings, predictions)
         h = dossier_hash(dossier)
         prev = existing.get(m["id"])
-        if prev and prev["inputs_hash"] == h:
+        if prev and prev["inputs_hash"] == h and prev.get("state") == state:
             skipped += 1
             continue
-        label = f"{dossier['fixture']['home']} vs {dossier['fixture']['away']}"
+        # post-match reads are written once — don't churn them on data drift
+        if prev and prev.get("state") == "post" and state == "post":
+            skipped += 1
+            continue
+        label = f"{dossier['fixture']['home']} vs {dossier['fixture']['away']} [{state}]"
         try:
-            out = generate_lowdown(dossier)
+            out = generate_lowdown(dossier, state)
         except Exception as e:
             print(f"[lowdown] {label}: generation failed: {e}")
             failed += 1
@@ -403,6 +516,7 @@ def run(days_ahead: int = 7, limit: int | None = None) -> dict:
         db.upsert("lowdowns", [{
             "match_id": m["id"],
             "version": LOWDOWN_VERSION,
+            "state": state,
             "paragraphs": out["paragraphs"],
             "verdict": out.get("verdict"),
             "inputs_hash": h,

@@ -12,10 +12,10 @@ import { CompetitionBadge } from "@/components/ds";
 import { PlayerStatRow } from "@/components/ds";
 import {
   loadFollowedEntities, upcomingForTeams, recentResultsForTeams,
-  liveMatches, upcomingAll, MODEL_VERSION,
+  liveMatches, upcomingAll, resultsAll, MODEL_VERSION,
   seasonTotalsForPlayers, countriesByIds,
 } from "@/lib/data";
-import { flagFor, competitionCode, competitionTone } from "@/lib/format";
+import { flagFor, competitionCode, competitionTone, isPlaceholderTeam } from "@/lib/format";
 import type { RichMatch, PlayerAgg } from "@/lib/data";
 import type { Player, Country } from "@/lib/supabase";
 
@@ -26,18 +26,39 @@ export default async function TodayScreen() {
   const followedTeamIds = new Set<number>(teams.map(t => t.id));
   players.forEach(p => p.team_id && followedTeamIds.add(p.team_id));
 
-  const [live, allUpcoming, yoursUpcoming, yoursResults, playerTotals, playerCountries] = await Promise.all([
+  const [live, allUpcoming, yoursUpcoming, yoursResults, allRecent, playerTotals, playerCountries] = await Promise.all([
     liveMatches(),
     upcomingAll(60),
     upcomingForTeams(Array.from(followedTeamIds), 20),
     recentResultsForTeams(Array.from(followedTeamIds), 6),
+    resultsAll(30),
     seasonTotalsForPlayers(players.map(p => p.id)),
     countriesByIds(players.map(p => p.country_id).filter((x): x is number => x != null)),
   ]);
   const yours = yoursUpcoming.filter(m => m.status === "scheduled");
+
+  // Hero: your next match if you have one; otherwise the next real fixture
+  // anywhere we track — the page never leads with an empty box.
+  const heroFollowed = yours.length > 0;
+  const hero = yours[0] ?? allUpcoming.find(m =>
+    m.status === "scheduled"
+    && !isPlaceholderTeam(m.home_team?.name) && !isPlaceholderTeam(m.away_team?.name)) ?? null;
+
   const wcKnockout = allUpcoming
-    .filter(m => m.league?.name === "World Cup" && !isFollowed(m, followedTeamIds))
+    .filter(m => m.league?.name === "World Cup" && !isFollowed(m, followedTeamIds)
+      && m.id !== hero?.id)
     .slice(0, 3);
+
+  // "Just in" means RECENT: results from the last 72h across everything we
+  // track, followed teams first — not weeks-old games from the watchlist.
+  const cutoff = Date.now() - 72 * 3600_000;
+  const recent = allRecent
+    .filter(r => new Date(r.kickoff_utc).getTime() >= cutoff)
+    .sort((a, b) =>
+      Number(isFollowed(b, followedTeamIds)) - Number(isFollowed(a, followedTeamIds))
+      || +new Date(b.kickoff_utc) - +new Date(a.kickoff_utc))
+    .slice(0, 4);
+  const justIn = recent.length ? recent : yoursResults.slice(0, 4);
 
   return (
     <div>
@@ -46,28 +67,28 @@ export default async function TodayScreen() {
         <div className="">
           {/* Left / main column: hero + your matches */}
           <div>
-            {yours.length > 0 && <NextMatchCard m={yours[0]} followedTeamIds={followedTeamIds} />}
             {live.map(m => <LiveHeroCard key={m.id} m={m} />)}
+            {hero && <NextMatchCard m={hero} followedTeamIds={followedTeamIds} followed={heroFollowed} />}
 
             <SectionHeading tick="var(--gold)">Next up for you</SectionHeading>
             {yours.length > 1
               ? yours.slice(1, 5).map(m => (
                   <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />
                 ))
-              : yours.length === 0
-                ? <EmptyState>No upcoming fixtures for anyone you follow.</EmptyState>
-                : <div style={{ ...eyebrow, margin: "0 2px 4px" }}>
-                    that's everything scheduled — more land after the WC final
-                  </div>}
+              : <div style={{ ...eyebrow, margin: "0 2px 4px" }}>
+                  {yours.length === 0
+                    ? "nobody you follow plays soon — the cup takes over below"
+                    : "that's everything scheduled — more land after the WC final"}
+                </div>}
 
-            {yoursResults.length > 0 && (
+            {justIn.length > 0 && (
               <>
                 <SectionHeading
                   trailing={<Link href="/matches" style={{
                     color: "var(--accent-2)", fontSize: "var(--fs-xs)",
                   }}>all →</Link>}
                 >Just in</SectionHeading>
-                {yoursResults.slice(0, 4).map(m => (
+                {justIn.map(m => (
                   <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />
                 ))}
               </>
@@ -115,7 +136,9 @@ function isFollowed(m: RichMatch, ids: Set<number>) {
 
 /* ============ Hero cards ============ */
 
-function NextMatchCard({ m, followedTeamIds }: { m: RichMatch; followedTeamIds: Set<number> }) {
+function NextMatchCard({ m, followedTeamIds, followed = true }: {
+  m: RichMatch; followedTeamIds: Set<number>; followed?: boolean;
+}) {
   const kick = new Date(m.kickoff_utc);
   const now = new Date();
   const days = Math.round((kick.getTime() - now.getTime()) / 864e5);
@@ -123,15 +146,18 @@ function NextMatchCard({ m, followedTeamIds }: { m: RichMatch; followedTeamIds: 
   const home = m.home_team; const away = m.away_team;
   const comp = m.league?.name ?? "";
   const pred = m.prediction;
+  const railColor = followed ? "var(--follow)" : "var(--accent-2)";
   return (
     <Link href={`/matches/${m.id}`} style={{
       display: "block", textDecoration: "none", color: "inherit",
       background: "var(--surface-panel)", border: "1px solid var(--border)",
       borderRadius: "var(--radius-2xl)", padding: "12px 14px 13px",
-      boxShadow: "inset 3px 0 0 var(--follow)", marginBottom: 7,
+      boxShadow: `inset 3px 0 0 ${railColor}`, marginBottom: 7,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
-        <span style={{ ...eyebrow, color: "var(--follow)" }}>your next match · {when}</span>
+        <span style={{ ...eyebrow, color: railColor }}>
+          {followed ? "your next match" : "the big one"} · {when}
+        </span>
         <div style={{ flex: 1 }} />
         {comp && <CompetitionBadge code={competitionCode(comp)} tone={competitionTone(comp)} />}
       </div>
@@ -204,7 +230,7 @@ function LiveHeroCard({ m }: { m: RichMatch }) {
           <div style={{
             ...eyebrow, marginTop: 6, display: "flex", justifyContent: "space-between",
           }}>
-            <span>pre-match · mpfc v1</span>
+            <span>pre-match · mpfc {MODEL_VERSION.replace("footy-mp-", "")}</span>
             <span style={{ color: "var(--accent-2)" }}>full read →</span>
           </div>
         </div>

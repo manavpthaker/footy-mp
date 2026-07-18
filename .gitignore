@@ -10,3 +10,4 @@ node_modules/
 .vercel
 .env*
 *.tsbuildinfo
+downloaded_files/

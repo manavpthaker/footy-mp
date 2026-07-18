@@ -14,6 +14,11 @@ import { flagFor } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata({ params }: { params: { id: string } }) {
+  const l = await getLeague(Number(params.id));
+  return { title: l ? l.name : "League" };
+}
+
 export default async function LeagueDetail({ params }: { params: { id: string } }) {
   const id = Number(params.id);
   const league = await getLeague(id);

@@ -1,6 +1,8 @@
--- footy-mp — Supabase Postgres schema
--- Run in the Supabase SQL editor (or via `supabase db push`).
--- Single-user to start; follows default to user 'mp'. RLS can be layered on later.
+-- footy-mp — Supabase Postgres schema (baseline incl. migration 002)
+-- Fresh install: run this, then skip migrations. Existing DB: run
+-- data/db/migrations/002_backbone.sql instead.
+-- Single-user; follows default to user 'mp'. RLS: anon = read-only (see bottom);
+-- all writes go through the service role (ETL + server API routes).
 
 -- ---------- reference tables ----------
 
@@ -18,7 +20,8 @@ create table if not exists leagues (
   espn_slug       text,               -- e.g. eng.1, esp.1, uefa.champions
   understat_slug  text,               -- e.g. EPL, La_liga (null for intl)
   tier            int default 1,
-  is_international boolean default false,
+  is_international boolean default false,  -- national-team competition
+  format          text default 'league',   -- league | cup | tournament | qualifiers | friendly
   unique (name, country_id)
 );
 
@@ -65,11 +68,17 @@ create table if not exists matches (
   pens_away      int,
   winner_team_id bigint references teams(id),
   espn_event_id  text unique,
-  season         text,
+  season         text,                      -- '2026-27' (club) or '2026' (intl/calendar)
+  phase          text,                      -- ESPN season.slug: group-stage, semifinals, final…
+  is_knockout    boolean default false,     -- goes to ET/pens if level
   updated_at     timestamptz default now()
 );
 create index if not exists idx_matches_kickoff on matches(kickoff_utc);
 create index if not exists idx_matches_league  on matches(league_id);
+create index if not exists idx_matches_status  on matches(status);
+create index if not exists idx_matches_home    on matches(home_team_id);
+create index if not exists idx_matches_away    on matches(away_team_id);
+create index if not exists idx_matches_season  on matches(season);
 
 -- the model's fuel: real per-team match stats incl. xG
 create table if not exists team_match_stats (
@@ -163,6 +172,21 @@ create table if not exists backtest_runs (
   run_at        timestamptz default now()
 );
 
+-- how things move: transfers + promotion/relegation, detected by the pipeline
+create table if not exists movements (
+  id             bigint generated always as identity primary key,
+  kind           text not null check (kind in ('transfer','league_change')),
+  player_id      bigint references players(id) on delete cascade,
+  team_id        bigint references teams(id)   on delete cascade,
+  from_team_id   bigint references teams(id),
+  to_team_id     bigint references teams(id),
+  from_league_id bigint references leagues(id),
+  to_league_id   bigint references leagues(id),
+  noticed_at     timestamptz not null default now(),
+  note           text
+);
+create index if not exists idx_movements_noticed on movements(noticed_at desc);
+
 -- "the lowdown" — LLM-written match commentary grounded in the model + stats
 create table if not exists lowdowns (
   id           bigint generated always as identity primary key,
@@ -175,3 +199,26 @@ create table if not exists lowdowns (
   generated_at timestamptz not null default now(),
   unique (match_id, version)
 );
+
+-- ---------- supporting indexes ----------
+create index if not exists idx_pms_player      on player_match_stats(player_id);
+create index if not exists idx_pms_team        on player_match_stats(team_id);
+create index if not exists idx_players_team    on players(team_id);
+create index if not exists idx_players_country on players(country_id);
+create unique index if not exists idx_teams_espn_id on teams(espn_id)
+  where espn_id is not null and espn_id <> '';
+
+-- ---------- RLS: anon key reads, service role writes ----------
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'countries','leagues','teams','players','matches','team_match_stats',
+    'player_match_stats','follows','model_ratings','predictions',
+    'backtest_runs','lowdowns','movements'
+  ] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists "anon read" on %I', t);
+    execute format('create policy "anon read" on %I for select using (true)', t);
+  end loop;
+end $$;

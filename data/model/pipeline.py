@@ -42,13 +42,40 @@ def _page_all(query_fn, page_size: int = 1000) -> list[dict]:
         offset += page_size
 
 
+def _league_meta(client) -> dict[int, dict]:
+    """League metadata with graceful pre-migration fallback: 'format' arrives with
+    migration 002; before that, approximate from is_international."""
+    cols = "id,name,is_international" + (",format" if db.has_backbone() else "")
+    leagues = getattr(client.table("leagues").select(cols).execute(), "data", None) or []
+    out = {}
+    for l in leagues:
+        fmt = l.get("format")
+        if not fmt:
+            fmt = "tournament" if l.get("is_international") else "league"
+        out[l["id"]] = {**l, "format": fmt}
+    return out
+
+
+def _neutral(fmt: str | None, phase: str | None) -> bool:
+    """Neutral venue: finals tournaments (WC/Euros/…) always; club cups only for
+    the final. Qualifiers/friendlies/leagues keep home advantage."""
+    from data.normalize import is_neutral
+    return is_neutral(fmt, phase)
+
+
+def _match_cols() -> str:
+    base = ("id,kickoff_utc,home_team_id,away_team_id,home_goals,away_goals,"
+            "status,league_id,went_et,went_pens,pens_home,pens_away")
+    if db.has_backbone():
+        base += ",phase,is_knockout"
+    return base
+
+
 def _load_matches_for_fit() -> list[dict]:
     """All finished matches with either xG or goals, in engine.fit_ratings shape."""
     client = db.client()
-    matches = _page_all(lambda: client.table("matches").select(
-        "id,kickoff_utc,home_team_id,away_team_id,home_goals,away_goals,status,league_id,"
-        "went_et,went_pens,pens_home,pens_away"
-    ).eq("status", "final"))
+    matches = _page_all(lambda: client.table("matches").select(_match_cols())
+                        .eq("status", "final"))
     stats = _page_all(lambda: client.table("team_match_stats").select(
         "match_id,team_id,is_home,xg,xga"))
     teams = getattr(client.table("teams").select("id,name").execute(), "data", None) or []
@@ -57,11 +84,7 @@ def _load_matches_for_fit() -> list[dict]:
     for s in stats:
         stat_by_mid.setdefault(s["match_id"], []).append(s)
 
-    league_meta = {}
-    leagues = getattr(client.table("leagues").select("id,name,is_international").execute(),
-                      "data", None) or []
-    for l in leagues:
-        league_meta[l["id"]] = l
+    league_meta = _league_meta(client)
 
     rows = []
     for m in matches:
@@ -83,7 +106,7 @@ def _load_matches_for_fit() -> list[dict]:
             "away_goals": m.get("away_goals"),
             "home_xg": hx, "away_xg": ax,
             "date": (m.get("kickoff_utc") or "")[:10],
-            "neutral": bool(L.get("is_international")),
+            "neutral": _neutral(L.get("format"), m.get("phase")),
             "league": L.get("name"),
             "went_et": m.get("went_et"),
             "went_pens": m.get("went_pens"),
@@ -95,17 +118,11 @@ def _load_matches_for_fit() -> list[dict]:
 
 def _load_upcoming() -> list[dict]:
     client = db.client()
-    matches = getattr(
-        client.table("matches").select(
-            "id,kickoff_utc,home_team_id,away_team_id,league_id,status"
-        ).eq("status", "scheduled").execute(),
-        "data", None,
-    ) or []
+    matches = _page_all(lambda: client.table("matches").select(_match_cols())
+                        .eq("status", "scheduled"))
     teams = getattr(client.table("teams").select("id,name").execute(), "data", None) or []
     team_name = {t["id"]: t["name"] for t in teams}
-    leagues = getattr(client.table("leagues").select("id,is_international,name").execute(),
-                      "data", None) or []
-    league_meta = {l["id"]: l for l in leagues}
+    league_meta = _league_meta(client)
     out = []
     for m in matches:
         home = team_name.get(m["home_team_id"])
@@ -113,11 +130,14 @@ def _load_upcoming() -> list[dict]:
         if not home or not away:
             continue
         L = league_meta.get(m["league_id"], {})
+        # pre-migration fallback: treat tournament matches as knockouts (old behavior)
+        ko = bool(m.get("is_knockout")) if db.has_backbone() \
+            else L.get("format") == "tournament"
         out.append({
             "match_id": m["id"],
             "home": home, "away": away,
-            "neutral": bool(L.get("is_international")),
-            "is_knockout": bool(L.get("is_international")),  # rough proxy — refine later
+            "neutral": _neutral(L.get("format"), m.get("phase")),
+            "is_knockout": ko,
             "league_name": L.get("name"),
         })
     return out

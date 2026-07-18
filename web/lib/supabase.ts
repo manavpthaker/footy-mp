@@ -44,14 +44,18 @@ export interface Player {
   team_id: number | null;
   country_id: number | null;
   position: string | null;
+  dob: string | null;
   photo_url: string | null;
 }
+export type LeagueFormat = "league" | "cup" | "tournament" | "qualifiers" | "friendly";
 export interface League {
   id: number;
   name: string;
   country_id: number | null;
   espn_slug: string | null;
   is_international: boolean;
+  format?: LeagueFormat | null;   // arrives with migration 002
+  tier?: number | null;
 }
 export interface Country {
   id: number;
@@ -69,11 +73,27 @@ export interface Match {
   minute: number | null;
   home_goals: number | null;
   away_goals: number | null;
+  went_et: boolean;
   went_pens: boolean;
   pens_home: number | null;
   pens_away: number | null;
   winner_team_id: number | null;
   espn_event_id: string | null;
+  season?: string | null;         // '2026-27' (club) / '2026' (intl)
+  phase?: string | null;          // group-stage, semifinals, final, …
+  is_knockout?: boolean | null;   // goes to ET/pens if level
+}
+export interface Movement {
+  id: number;
+  kind: "transfer" | "league_change";
+  player_id: number | null;
+  team_id: number | null;
+  from_team_id: number | null;
+  to_team_id: number | null;
+  from_league_id: number | null;
+  to_league_id: number | null;
+  noticed_at: string;
+  note: string | null;
 }
 export interface Prediction {
   match_id: number;

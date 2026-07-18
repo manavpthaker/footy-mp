@@ -9,20 +9,26 @@ import { FixtureItem } from "@/components/mobile/FixtureItem";
 import { FollowToggle } from "@/components/mobile/FollowToggle";
 import {
   getCountry, listFollows, nationalTeamForCountry, leaguesForCountry,
-  upcomingForTeams, recentResultsForTeams,
+  upcomingForTeams, recentResultsForTeams, squadByClub,
 } from "@/lib/data";
 import { flagFor } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata({ params }: { params: { id: string } }) {
+  const c = await getCountry(Number(params.id));
+  return { title: c ? c.name : "Country" };
+}
+
 export default async function CountryDetail({ params }: { params: { id: string } }) {
   const id = Number(params.id);
   const country = await getCountry(id);
   if (!country) notFound();
-  const [team, leagues, follows] = await Promise.all([
+  const [team, leagues, follows, squad] = await Promise.all([
     nationalTeamForCountry(id),
     leaguesForCountry(id),
     listFollows(),
+    squadByClub(id),
   ]);
   const [upcoming, results] = team
     ? await Promise.all([upcomingForTeams([team.id], 6), recentResultsForTeams([team.id], 6)])
@@ -63,6 +69,54 @@ export default async function CountryDetail({ params }: { params: { id: string }
           <>
             <SectionHeading tick="var(--accent-2)">Latest results</SectionHeading>
             {results.map(m => <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />)}
+          </>
+        )}
+
+        {squad.length > 0 && (
+          <>
+            <SectionHeading tick="var(--gold)">Where the squad plays</SectionHeading>
+            <div style={{ ...eyebrow, margin: "0 2px 8px" }}>
+              the national team is built from these clubs — club form is how you
+              scout {country.name} between camps
+            </div>
+            {squad.map((g, i) => (
+              <div key={g.club?.id ?? `unknown-${i}`} style={{
+                background: "var(--surface-panel)", border: "1px solid var(--border)",
+                borderRadius: "var(--radius-lg)", padding: "9px 11px", marginBottom: 6,
+              }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  {g.club ? (
+                    <Link href={`/teams/${g.club.id}`} style={{
+                      fontWeight: 700, fontSize: "var(--fs-sm)", color: "inherit",
+                      textDecoration: "none",
+                    }}>{g.club.name}</Link>
+                  ) : (
+                    <span style={{ fontWeight: 700, fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>
+                      Club untracked
+                    </span>
+                  )}
+                  {g.league && (
+                    <Link href={`/leagues/${g.league.id}`} style={{
+                      ...eyebrow, color: "var(--accent-2)", textDecoration: "none",
+                    }}>{g.league.name}</Link>
+                  )}
+                  <span style={{ ...eyebrow, marginLeft: "auto" }}>{g.players.length}</span>
+                </div>
+                <div style={{
+                  marginTop: 4, fontSize: "var(--fs-xs)", color: "var(--text-muted)",
+                  lineHeight: 1.6,
+                }}>
+                  {g.players.map((p, j) => (
+                    <React.Fragment key={p.id}>
+                      {j > 0 && " · "}
+                      <Link href={`/players/${p.id}`} style={{ color: "inherit", textDecoration: "none" }}>
+                        {p.name}{p.position ? ` (${p.position})` : ""}
+                      </Link>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            ))}
           </>
         )}
 

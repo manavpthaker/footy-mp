@@ -13,6 +13,11 @@ import { flagFor, competitionCode } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata({ params }: { params: { id: string } }) {
+  const p = await getPlayer(Number(params.id));
+  return { title: p ? p.name : "Player" };
+}
+
 const fmt1 = (x: number) => (Math.round(x * 10) / 10).toFixed(1);
 
 export default async function PlayerDetail({ params }: { params: { id: string } }) {

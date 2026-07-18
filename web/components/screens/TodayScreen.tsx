@@ -13,20 +13,20 @@ import { PlayerStatRow } from "@/components/ds";
 import {
   loadFollowedEntities, upcomingForTeams, recentResultsForTeams,
   liveMatches, upcomingAll, resultsAll, MODEL_VERSION,
-  seasonTotalsForPlayers, countriesByIds,
+  seasonTotalsForPlayers, countriesByIds, recentMovements, nextUpByCompetition,
 } from "@/lib/data";
 import { flagFor, competitionCode, competitionTone, isPlaceholderTeam } from "@/lib/format";
-import type { RichMatch, PlayerAgg } from "@/lib/data";
+import type { RichMatch, PlayerAgg, RichMovement, CompetitionNext } from "@/lib/data";
 import type { Player, Country } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export default async function TodayScreen() {
-  const { players, teams, leagues, countries } = await loadFollowedEntities();
+  const { players, teams } = await loadFollowedEntities();
   const followedTeamIds = new Set<number>(teams.map(t => t.id));
   players.forEach(p => p.team_id && followedTeamIds.add(p.team_id));
 
-  const [live, allUpcoming, yoursUpcoming, yoursResults, allRecent, playerTotals, playerCountries] = await Promise.all([
+  const [live, allUpcoming, yoursUpcoming, yoursResults, allRecent, playerTotals, playerCountries, moves, nextUp] = await Promise.all([
     liveMatches(),
     upcomingAll(60),
     upcomingForTeams(Array.from(followedTeamIds), 20),
@@ -34,7 +34,12 @@ export default async function TodayScreen() {
     resultsAll(30),
     seasonTotalsForPlayers(players.map(p => p.id)),
     countriesByIds(players.map(p => p.country_id).filter((x): x is number => x != null)),
+    recentMovements(6),
+    nextUpByCompetition(),
   ]);
+  const intlNext = nextUp.filter(n =>
+    ["tournament", "qualifiers"].includes(n.league.format ?? (n.league.is_international ? "tournament" : ""))
+  ).slice(0, 4);
   const yours = yoursUpcoming.filter(m => m.status === "scheduled");
 
   // Hero: your next match if you have one; otherwise the next real fixture
@@ -77,8 +82,8 @@ export default async function TodayScreen() {
                 ))
               : <div style={{ ...eyebrow, margin: "0 2px 4px" }}>
                   {yours.length === 0
-                    ? "nobody you follow plays soon — the cup takes over below"
-                    : "that's everything scheduled — more land after the WC final"}
+                    ? "nobody you follow plays soon — the wider calendar below"
+                    : "that's everything scheduled for your list right now"}
                 </div>}
 
             {justIn.length > 0 && (
@@ -117,6 +122,37 @@ export default async function TodayScreen() {
                     agg={playerTotals[p.id] ?? null}
                     country={p.country_id ? playerCountries[p.country_id] ?? null : null} />
                 ))}
+              </>
+            )}
+
+            <SectionHeading tick="var(--gold)"
+              trailing={<Link href="/map" style={{
+                color: "var(--accent-2)", fontSize: "var(--fs-xs)",
+              }}>the map →</Link>}
+            >Road to 2030</SectionHeading>
+            {intlNext.length > 0 ? intlNext.map(n => <NextCompRow key={n.league.id} n={n} />) : (
+              <div style={{ ...eyebrow, margin: "0 2px 8px" }}>
+                no international dates on the books yet — qualifiers land here as
+                federations schedule them
+              </div>
+            )}
+            <Link href="/map" style={{
+              display: "block", textDecoration: "none", color: "inherit",
+              background: "var(--surface-tint)", border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)", padding: "9px 12px", marginBottom: 7,
+              fontSize: "var(--fs-xs)", lineHeight: 1.55,
+            }}>
+              <b>New to the sport&apos;s plumbing?</b>{" "}
+              <span style={{ color: "var(--text-muted)" }}>
+                The Map explains how leagues, cups, clubs and national teams fit
+                together — and the 4-year road from this World Cup to 2030.
+              </span>
+            </Link>
+
+            {moves.length > 0 && (
+              <>
+                <SectionHeading tick="var(--accent-2)">Movement</SectionHeading>
+                {moves.map(mv => <MovementRow key={mv.id} mv={mv} />)}
               </>
             )}
           </div>
@@ -265,6 +301,57 @@ function TeamHero({ name }: { name: string }) {
       }}>{name}</div>
     </div>
   );
+}
+
+function NextCompRow({ n }: { n: CompetitionNext }) {
+  const kick = new Date(n.next.kickoff_utc);
+  return (
+    <Link href={`/leagues/${n.league.id}`} style={{
+      display: "flex", alignItems: "center", gap: 9, textDecoration: "none",
+      color: "inherit", background: "var(--surface-panel)",
+      border: "1px solid var(--border)", borderRadius: "var(--radius-lg)",
+      padding: "8px 11px", marginBottom: 6,
+    }}>
+      <span style={{ ...mono, fontSize: "var(--fs-xs)", color: "var(--gold)", minWidth: 34 }}>
+        {competitionCode(n.league.name)}
+      </span>
+      <span style={{ fontWeight: 700, fontSize: "var(--fs-sm)", flex: 1, minWidth: 0 }}>
+        {n.league.name}
+      </span>
+      <span style={eyebrow}>
+        {kick.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+      </span>
+    </Link>
+  );
+}
+
+function MovementRow({ mv }: { mv: RichMovement }) {
+  const when = new Date(mv.noticed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const isTransfer = mv.kind === "transfer";
+  const subjectHref = isTransfer && mv.player ? `/players/${mv.player.id}`
+    : mv.moved_team ? `/teams/${mv.moved_team.id}` : null;
+  const subject = isTransfer ? mv.player?.name ?? "Player" : mv.moved_team?.name ?? "Club";
+  const fromTo = isTransfer
+    ? `${mv.from_team?.name ?? "?"} → ${mv.to_team?.name ?? "?"}`
+    : `${mv.from_league?.name ?? "?"} → ${mv.to_league?.name ?? "?"}`;
+  const body = (
+    <div style={{
+      display: "flex", alignItems: "baseline", gap: 8,
+      background: "var(--surface-panel)", border: "1px solid var(--border)",
+      borderRadius: "var(--radius-lg)", padding: "8px 11px", marginBottom: 6,
+    }}>
+      <span style={{ fontSize: 13 }}>{isTransfer ? "⇄" : "↕"}</span>
+      <span style={{ fontWeight: 700, fontSize: "var(--fs-sm)" }}>{subject}</span>
+      <span style={{
+        fontSize: "var(--fs-xs)", color: "var(--text-muted)", flex: 1,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>{fromTo}</span>
+      <span style={eyebrow}>{when}</span>
+    </div>
+  );
+  return subjectHref
+    ? <Link href={subjectHref} style={{ textDecoration: "none", color: "inherit", display: "block" }}>{body}</Link>
+    : body;
 }
 
 function PlayerRow({ p, agg, country }: { p: Player; agg: PlayerAgg | null; country: Country | null }) {

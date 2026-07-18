@@ -15,6 +15,10 @@ Modes (env var PIPELINE_MODE, or CLI arg):
                 Controlled by PIPELINE_PLAYER_SEASONS (default: current season).
                 Slow uncached (~1 request per match), cheap once soccerdata's disk
                 cache is warm.
+    rosters   — national-team squads from ESPN: fills player nationality, DOB,
+                photo and links each international to their CLUB (the club↔country
+                web). Also detects transfers. Run weekly.
+    seasons   — one-time backfill: stamp matches.season for historical rows.
     model     — Phase 2 hook: run the model pipeline after ingest.
     backtest  — walk-forward backtest vs the goals-only baseline; exits non-zero
                 if the xG model does not beat the baseline on RPS and log-loss.
@@ -33,14 +37,10 @@ from datetime import datetime, timedelta, timezone
 
 from data import db
 from data.ingest import espn
-from data.normalize import LEAGUE_SOURCES, canonical_team
+from data.normalize import (LEAGUES, LEAGUE_SOURCES, canonical_team,
+                            is_knockout_phase, season_label)
 
-DEFAULT_LEAGUES = [
-    "Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1",
-    "Champions League", "Europa League",
-    # internationals — empty scoreboards off-tournament, so always safe to pull
-    "World Cup", "Euros", "Copa America",
-]
+DEFAULT_LEAGUES = list(LEAGUES.keys())
 
 
 # -------------------------- ESPN ingest --------------------------
@@ -54,12 +54,16 @@ def _daterange(days_back: int, days_fwd: int):
 def _ensure_leagues(names: list[str]) -> dict[str, int]:
     ids = {}
     for name in names:
-        espn_slug, us_slug = LEAGUE_SOURCES.get(name, (None, None))
-        # infer country + international flag from name (rough but adequate for our list)
-        is_intl = name in {"Champions League", "Europa League", "World Cup", "Euros", "Copa America"}
+        L = LEAGUES.get(name)
+        if L is None:
+            espn_slug, us_slug = LEAGUE_SOURCES.get(name, (None, None))
+            ids[name] = db.get_or_create_league(name=name, espn_slug=espn_slug,
+                                                understat_slug=us_slug)
+            continue
         ids[name] = db.get_or_create_league(
-            name=name, espn_slug=espn_slug, understat_slug=us_slug,
-            is_international=is_intl,
+            name=name, espn_slug=L.espn, understat_slug=L.understat,
+            is_international=L.format in ("tournament", "qualifiers", "friendly"),
+            tier=L.tier, format=L.format,
         )
     return ids
 
@@ -70,7 +74,10 @@ def ingest_espn(days_back: int = 3, days_fwd: int = 7,
     league_ids = _ensure_leagues(leagues)
     written = 0
     for name in leagues:
-        espn_slug, _ = LEAGUE_SOURCES.get(name, (None, None))
+        L = LEAGUES.get(name)
+        espn_slug = L.espn if L else LEAGUE_SOURCES.get(name, (None, None))[0]
+        fmt = L.format if L else "league"
+        style = L.season_style if L else "cross"
         if not espn_slug:
             continue
         for day in _daterange(days_back, days_fwd):
@@ -83,10 +90,12 @@ def ingest_espn(days_back: int = 3, days_fwd: int = 7,
                 if not home or not away:
                     continue
                 home_id = db.get_or_create_team(
-                    name=home, league_id=league_ids[name], espn_id=str(r.get("home_espn_id") or ""),
+                    name=home, league_id=league_ids[name],
+                    espn_id=str(r.get("home_espn_id") or ""), league_format=fmt,
                 )
                 away_id = db.get_or_create_team(
-                    name=away, league_id=league_ids[name], espn_id=str(r.get("away_espn_id") or ""),
+                    name=away, league_id=league_ids[name],
+                    espn_id=str(r.get("away_espn_id") or ""), league_format=fmt,
                 )
                 winner = None
                 w_name = canonical_team(r.get("winner"))
@@ -107,6 +116,10 @@ def ingest_espn(days_back: int = 3, days_fwd: int = 7,
                     "pens_home": r.get("pens_home"),
                     "pens_away": r.get("pens_away"),
                     "winner_team_id": winner,
+                    "phase": r.get("phase"),
+                    "is_knockout": is_knockout_phase(fmt, r.get("phase")),
+                    "season": season_label(fmt, style, r.get("season_year"),
+                                           r.get("kickoff_utc")),
                 })
             if rows:
                 db.upsert_matches(rows)
@@ -149,8 +162,8 @@ def ingest_understat(seasons: list[str], leagues: list[str] | None = None) -> in
             home = canonical_team(r.get("home")); away = canonical_team(r.get("away"))
             if not home or not away:
                 continue
-            home_id = db.get_or_create_team(home, league_id=league_id)
-            away_id = db.get_or_create_team(away, league_id=league_id)
+            home_id = db.get_or_create_team(home, league_id=league_id, league_format="league")
+            away_id = db.get_or_create_team(away, league_id=league_id, league_format="league")
 
             # find/create the match. Understat rows carry only a date, not a UTC kickoff.
             match_id = _find_or_create_match(
@@ -216,6 +229,8 @@ def _find_or_create_match(league_id: int, home_id: int, away_id: int,
         "status": "final" if home_goals is not None else "scheduled",
         "home_goals": _to_int(home_goals), "away_goals": _to_int(away_goals),
     }
+    if db.has_backbone():
+        row["season"] = season_label("league", "cross", None, row["kickoff_utc"])
     ins = getattr(c.table("matches").insert(row).execute(), "data", None) or []
     return ins[0]["id"] if ins else None
 
@@ -329,6 +344,110 @@ def ingest_player_stats(seasons: list[str], leagues: list[str] | None = None) ->
     return written
 
 
+# -------------------------- national-team rosters --------------------------
+
+# competition slugs a national team's roster can be fetched under, tried in order
+_ROSTER_SLUGS = ("fifa.world", "fifa.friendly", "fifa.worldq.uefa", "fifa.worldq.conmebol",
+                 "fifa.worldq.concacaf", "fifa.worldq.afc", "fifa.worldq.caf",
+                 "fifa.worldq.ofc", "uefa.nations")
+
+
+def ingest_rosters(limit: int | None = None) -> int:
+    """For every national team we know, pull the current squad from ESPN.
+
+    This is what powers the club↔country web:
+      * players get citizenship (country_id), DOB, position, photo
+      * each international is linked to their CLUB via ESPN's defaultTeam id —
+        clubs are resolved against our teams table (created if their league is
+        one we track, or as league-less shells otherwise)
+      * a changed club on an existing player is logged as a transfer movement
+    """
+    nats = [t for t in db.page_all("teams", "id,name,espn_id,country_id")
+            if t.get("espn_id")]
+    # is_national may be a string 'true' depending on client; select separately
+    flags = {t["id"]: t.get("is_national") for t in
+             db.page_all("teams", "id,is_national")}
+    nats = [t for t in nats if flags.get(t["id"])]
+    if limit:
+        nats = nats[:limit]
+    print(f"[rosters] {len(nats)} national teams")
+
+    club_cache: dict[str, int | None] = {}   # espn club id -> team_id
+    slug_to_league: dict[str, int] = {}
+    for name, L in LEAGUES.items():
+        if L.format == "league":
+            slug_to_league[L.espn] = db.get_or_create_league(
+                name=name, espn_slug=L.espn, understat_slug=L.understat,
+                tier=L.tier, format=L.format)
+
+    def resolve_club(club_espn_id: str | None, league_slug: str | None) -> int | None:
+        if not club_espn_id:
+            return None
+        if club_espn_id in club_cache:
+            return club_cache[club_espn_id]
+        hits = db.select("teams", "id", espn_id=club_espn_id)
+        if hits:
+            club_cache[club_espn_id] = hits[0]["id"]
+            return hits[0]["id"]
+        core = espn.fetch_team_core(club_espn_id)
+        if not core or not core.get("name"):
+            club_cache[club_espn_id] = None
+            return None
+        tid = db.get_or_create_team(
+            name=canonical_team(core["name"]) or core["name"],
+            league_id=slug_to_league.get(league_slug or ""),
+            espn_id=core["espn_id"], short_name=core.get("short_name"),
+            league_format="league",
+        )
+        club_cache[club_espn_id] = tid
+        return tid
+
+    written = 0
+    for nt in nats:
+        roster = []
+        for slug in _ROSTER_SLUGS:
+            roster = espn.fetch_roster(slug, nt["espn_id"])
+            if roster:
+                break
+        if not roster:
+            continue
+        country_id = nt.get("country_id") or db.get_or_create_country(nt["name"])
+        for a in roster:
+            club_id = resolve_club(a.get("club_espn_id"), a.get("club_league_slug"))
+            db.get_or_create_player(
+                name=a["name"], team_id=club_id, country_id=country_id,
+                position=a.get("position"), dob=a.get("dob"),
+                photo_url=a.get("photo_url"),
+            )
+            written += 1
+        print(f"[rosters] {nt['name']}: {len(roster)} players")
+    print(f"[rosters] done: {written} squad slots")
+    return written
+
+
+# -------------------------- season backfill --------------------------
+
+def backfill_seasons() -> int:
+    """Stamp matches.season for historical rows (one-time after migration 002)."""
+    if not db.has_backbone():
+        print("[seasons] migration 002 not applied — nothing to do")
+        return 0
+    leagues = {l["id"]: l for l in db.page_all("leagues", "id,name,format")}
+    styles = {name: L.season_style for name, L in LEAGUES.items()}
+    n = 0
+    for m in db.page_all("matches", "id,league_id,kickoff_utc,season"):
+        if m.get("season"):
+            continue
+        L = leagues.get(m["league_id"], {})
+        label = season_label(L.get("format"), styles.get(L.get("name"), "cross"),
+                             None, m.get("kickoff_utc"))
+        if label:
+            db.client().table("matches").update({"season": label}).eq("id", m["id"]).execute()
+            n += 1
+    print(f"[seasons] stamped {n} matches")
+    return n
+
+
 # -------------------------- follows seed --------------------------
 
 def seed_follows() -> None:
@@ -392,6 +511,11 @@ def main() -> int:
                        or _current_understat_season()).split(",") if s.strip()]
             n = ingest_player_stats(seasons)
             print(f"[pipeline] players done: {n} player-match rows")
+        elif mode == "rosters":
+            n = ingest_rosters()
+            print(f"[pipeline] rosters done: {n} squad slots")
+        elif mode == "seasons":
+            backfill_seasons()
         elif mode == "model":
             from data.model.pipeline import run as run_model
             run_model()

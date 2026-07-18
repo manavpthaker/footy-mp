@@ -3,13 +3,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RefreshButton } from "./RefreshButton";
-
-const TABS = [
-  { id: "today",     glyph: "◆", label: "Today",     href: "/" },
-  { id: "matches",   glyph: "⏱", label: "Matches",   href: "/matches" },
-  { id: "tables",    glyph: "≣", label: "Tables",    href: "/tables" },
-  { id: "following", glyph: "★", label: "Following", href: "/following" },
-];
+import { TABS } from "./tabs";
 
 /**
  * One header for both viewports.
@@ -94,6 +88,7 @@ export function AppHeader() {
 function detailToTab(pathname: string): string {
   if (pathname.startsWith("/matches")) return "matches";
   if (pathname.startsWith("/leagues") || pathname.startsWith("/tables")) return "tables";
+  if (pathname.startsWith("/map")) return "map";
   if (pathname.startsWith("/teams") || pathname.startsWith("/players")) return "today";
   if (pathname.startsWith("/following")) return "following";
   return "today";

@@ -15,14 +15,10 @@ import urllib.request
 from datetime import datetime, timezone
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
+CORE = "https://sports.core.api.espn.com/v2/sports/soccer"
 
-# leagues we cover (extend freely). key = our label, value = ESPN slug.
-LEAGUES = {
-    "Premier League": "eng.1", "La Liga": "esp.1", "Serie A": "ita.1",
-    "Bundesliga": "ger.1", "Ligue 1": "fra.1", "Champions League": "uefa.champions",
-    "Europa League": "uefa.europa", "World Cup": "fifa.world",
-    "Euros": "uefa.euro", "Copa America": "conmebol.america",
-}
+# The authoritative league registry lives in data/normalize.py (LEAGUES).
+# This module stays slug-agnostic: callers pass slugs in.
 
 
 def _get(url: str) -> dict:
@@ -49,6 +45,7 @@ def fetch_day(slug: str, yyyymmdd: str) -> list[dict]:
         away = next((c for c in cs if c.get("homeAway") == "away"), cs[1])
         st = comp.get("status", {}).get("type", {})
         state = st.get("state")  # pre / in / post
+        season = ev.get("season") or {}
         so_h = home.get("shootoutScore")
         so_a = away.get("shootoutScore")
         went_pens = so_h is not None and so_a is not None
@@ -75,8 +72,65 @@ def fetch_day(slug: str, yyyymmdd: str) -> list[dict]:
             "winner": home["team"].get("displayName") if winner_home
                       else away["team"].get("displayName") if winner_away else None,
             "detail": st.get("detail"),
+            # phase: ESPN's season.slug — 'group-stage', 'semifinals', 'final',
+            # 'league-phase', or a season label for domestic leagues
+            "phase": season.get("slug"),
+            "season_year": season.get("year"),
         })
     return out
+
+
+# ---------------- rosters (national-team squads -> the club/country web) ----------------
+
+_POS_MAP = {"G": "GK", "D": "DF", "M": "MF", "F": "FW", "A": "FW"}
+
+
+def _ref_id(obj) -> str | None:
+    """Pull the trailing id out of a core-API $ref like .../teams/103?lang=en."""
+    ref = (obj or {}).get("$ref") or ""
+    tail = ref.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
+    return tail or None
+
+
+def fetch_roster(slug: str, team_espn_id: str) -> list[dict]:
+    """Current squad for a (national) team under a competition slug.
+    Gives citizenship + date of birth + the player's CLUB (defaultTeam) — the
+    raw material for the club↔country web."""
+    url = f"{BASE}/{slug}/teams/{team_espn_id}/roster"
+    try:
+        data = _get(url)
+    except Exception as e:
+        print(f"[espn] roster {slug}/{team_espn_id} error: {e}")
+        return []
+    out = []
+    for a in data.get("athletes", []):
+        pos = ((a.get("position") or {}).get("abbreviation") or "")[:1]
+        headshot = a.get("headshot")
+        out.append({
+            "name": a.get("displayName") or a.get("fullName"),
+            "position": _POS_MAP.get(pos),
+            "jersey": a.get("jersey"),
+            "dob": (a.get("dateOfBirth") or "")[:10] or None,
+            "citizenship": a.get("citizenship"),
+            "club_espn_id": _ref_id(a.get("defaultTeam")),
+            "club_league_slug": _ref_id(a.get("defaultLeague")),
+            "photo_url": (headshot or {}).get("href") if isinstance(headshot, dict) else None,
+        })
+    return [r for r in out if r["name"]]
+
+
+def fetch_team_core(team_espn_id: str) -> dict | None:
+    """Resolve a bare team id (from a roster's defaultTeam $ref) to its name."""
+    try:
+        data = _get(f"{CORE}/teams/{team_espn_id}")
+    except Exception as e:
+        print(f"[espn] core team {team_espn_id} error: {e}")
+        return None
+    return {
+        "espn_id": str(data.get("id") or team_espn_id),
+        "name": data.get("displayName") or data.get("name"),
+        "short_name": data.get("shortDisplayName") or data.get("abbreviation"),
+    }
 
 
 def fetch_summary(slug: str, event_id: str) -> dict:

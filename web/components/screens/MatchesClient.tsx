@@ -6,15 +6,10 @@ import { Pad, Segmented, ChipRail, Chip, EmptyState, eyebrow } from "@/component
 import { FixtureGroup } from "@/components/ds";
 import type { RichMatch } from "@/lib/data";
 
-const COMP_OPTIONS = [
-  { id: "all", label: "All" },
-  { id: "World Cup", label: "World Cup" },
-  { id: "Champions League", label: "Champions League" },
-  { id: "Premier League", label: "Premier League" },
-  { id: "La Liga", label: "La Liga" },
-  { id: "Serie A", label: "Serie A" },
-  { id: "Bundesliga", label: "Bundesliga" },
-  { id: "Ligue 1", label: "Ligue 1" },
+// chips lead with the marquee competitions, then whatever else has fixtures
+const COMP_PRIORITY = [
+  "World Cup", "Champions League", "Premier League", "La Liga", "Serie A",
+  "Bundesliga", "Ligue 1", "Europa League",
 ];
 
 export function MatchesClient({
@@ -26,6 +21,18 @@ export function MatchesClient({
   const [comp, setComp] = React.useState("all");
   const [onlyFollowed, setOnlyFollowed] = React.useState(false);
   const followedSet = React.useMemo(() => new Set(initialFollowed), [initialFollowed]);
+
+  // competitions that actually have matches in view — the rail adapts as
+  // qualifiers, cups and new leagues flow in over the 4-year arc
+  const compOptions = React.useMemo(() => {
+    const names = new Set<string>();
+    for (const m of [...upcoming, ...results]) if (m.league?.name) names.add(m.league.name);
+    const sorted = Array.from(names).sort((a, b) => {
+      const ai = COMP_PRIORITY.indexOf(a); const bi = COMP_PRIORITY.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.localeCompare(b);
+    });
+    return [{ id: "all", label: "All" }, ...sorted.map(n => ({ id: n, label: n }))];
+  }, [upcoming, results]);
 
   const source = mode === "upcoming" ? upcoming : results;
   const filtered = source.filter(m => {
@@ -47,7 +54,7 @@ export function MatchesClient({
       <ChipRail>
         <Chip active={onlyFollowed} onClick={() => setOnlyFollowed(!onlyFollowed)}>★ Following</Chip>
         <span style={{ width: 1, background: "var(--border)", margin: "2px 2px", flex: "0 0 auto" }} />
-        {COMP_OPTIONS.map(o => (
+        {compOptions.map(o => (
           <Chip key={o.id} active={comp === o.id} onClick={() => setComp(o.id)}>{o.label}</Chip>
         ))}
       </ChipRail>

@@ -3,7 +3,7 @@
  * All functions are called from server components — they await server() to
  * get a cookie-aware @supabase/ssr client.
  */
-import { server, Team, Player, League, Country, Match, Prediction, Follow, ModelRating, EntityType } from "./supabase";
+import { server, Team, Player, League, Country, Match, Movement, Prediction, Follow, ModelRating, EntityType } from "./supabase";
 
 export const USER_ID = "mp";
 export const MODEL_VERSION = "footy-mp-v2";
@@ -335,9 +335,23 @@ export async function standingsForLeague(leagueId: number): Promise<{ league: Le
     else { h.D++; a.D++; }
   }
 
+  // form from the league matches we already fetched — no per-team round-trips
   const teamIds = Object.keys(stats).map(Number);
-  const forms = await Promise.all(teamIds.map(id => formLast5(id)));
-  const formByTeam = new Map(teamIds.map((id, i) => [id, forms[i]]));
+  const byDate = [...matches]
+    .filter(m => m.home_goals != null && m.away_goals != null)
+    .sort((a, b) => (a.kickoff_utc < b.kickoff_utc ? -1 : 1));
+  const formByTeam = new Map<number, Array<"W" | "D" | "L">>();
+  for (const m of byDate) {
+    for (const [tid, gf, ga] of [
+      [m.home_team_id, m.home_goals!, m.away_goals!],
+      [m.away_team_id, m.away_goals!, m.home_goals!],
+    ] as Array<[number, number, number]>) {
+      const arr = formByTeam.get(tid) ?? [];
+      arr.push(gf > ga ? "W" : gf < ga ? "L" : "D");
+      if (arr.length > 5) arr.shift();
+      formByTeam.set(tid, arr);
+    }
+  }
 
   const rows = teamIds
     .map(id => {
@@ -371,14 +385,165 @@ export async function standingsForLeague(leagueId: number): Promise<{ league: Le
   return { league, rows };
 }
 
-/** Followed leagues that actually have completed matches (for the Tables chip rail). */
+const FALLBACK_TABLE_LEAGUES = ["Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"];
+
+/** Domestic leagues that can render a table (round-robin formats). */
 export async function tableableLeagues(): Promise<League[]> {
   const s = await server();
-  const { data } = await s
-    .from("leagues")
-    .select("*")
-    .in("name", ["Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"]);
-  return (data ?? []) as League[];
+  const { data } = await s.from("leagues").select("*").order("tier").order("name");
+  const all = (data ?? []) as League[];
+  const domestic = all.filter(l => (l.format ?? null) === "league");
+  const list = domestic.length ? domestic : all.filter(l => FALLBACK_TABLE_LEAGUES.includes(l.name));
+  // big-5 first, then the rest alphabetically
+  return list.sort((a, b) => {
+    const ai = FALLBACK_TABLE_LEAGUES.indexOf(a.name);
+    const bi = FALLBACK_TABLE_LEAGUES.indexOf(b.name);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.name.localeCompare(b.name);
+  });
+}
+
+// ---------- The ecosystem: how clubs, countries, and competitions connect ----------
+
+export interface SquadClubGroup {
+  club: Team | null;               // null = club unknown/untracked
+  league: League | null;
+  players: Player[];
+}
+
+/**
+ * Where a country's internationals earn their living: the national-team player
+ * pool grouped by club, clubs sorted by headcount. The heart of the
+ * club↔country web — populated by the weekly rosters ingest.
+ */
+export async function squadByClub(countryId: number): Promise<SquadClubGroup[]> {
+  const s = await server();
+  const { data } = await s.from("players").select("*").eq("country_id", countryId).order("name");
+  const players = (data ?? []) as Player[];
+  if (!players.length) return [];
+  const clubIds = Array.from(new Set(players.map(p => p.team_id).filter((x): x is number => x != null)));
+  const clubs = clubIds.length
+    ? ((await s.from("teams").select("*").in("id", clubIds)).data ?? []) as Team[]
+    : [];
+  const clubById = new Map(clubs.map(c => [c.id, c]));
+  const leagueIds = Array.from(new Set(clubs.map(c => c.league_id).filter((x): x is number => x != null)));
+  const leagues = leagueIds.length
+    ? ((await s.from("leagues").select("*").in("id", leagueIds)).data ?? []) as League[]
+    : [];
+  const leagueById = new Map(leagues.map(l => [l.id, l]));
+
+  const groups = new Map<number | 0, SquadClubGroup>();
+  for (const p of players) {
+    const club = p.team_id ? clubById.get(p.team_id) ?? null : null;
+    if (club?.is_national) continue;              // NT rows aren't clubs
+    const key = club?.id ?? 0;
+    const g = groups.get(key) ?? {
+      club,
+      league: club?.league_id ? leagueById.get(club.league_id) ?? null : null,
+      players: [],
+    };
+    g.players.push(p);
+    groups.set(key, g);
+  }
+  return Array.from(groups.values()).sort((a, b) =>
+    (a.club ? 0 : 1) - (b.club ? 0 : 1) || b.players.length - a.players.length);
+}
+
+export interface CountryGroup { country: Country; players: Player[] }
+
+/** A club squad grouped by nationality — which national teams this club feeds. */
+export async function squadByNationality(teamId: number): Promise<CountryGroup[]> {
+  const s = await server();
+  const { data } = await s.from("players").select("*").eq("team_id", teamId).order("name");
+  const players = (data ?? []) as Player[];
+  const ids = Array.from(new Set(players.map(p => p.country_id).filter((x): x is number => x != null)));
+  if (!ids.length) return [];
+  const countries = ((await s.from("countries").select("*").in("id", ids)).data ?? []) as Country[];
+  const cById = new Map(countries.map(c => [c.id, c]));
+  const groups = new Map<number, CountryGroup>();
+  for (const p of players) {
+    if (!p.country_id) continue;
+    const c = cById.get(p.country_id);
+    if (!c) continue;
+    const g = groups.get(c.id) ?? { country: c, players: [] };
+    g.players.push(p);
+    groups.set(c.id, g);
+  }
+  return Array.from(groups.values()).sort((a, b) => b.players.length - a.players.length);
+}
+
+export interface RichMovement extends Movement {
+  player?: Player | null;
+  from_team?: Team | null;
+  to_team?: Team | null;
+  moved_team?: Team | null;
+  from_league?: League | null;
+  to_league?: League | null;
+}
+
+/** Latest transfers + promotion/relegation the pipeline noticed. */
+export async function recentMovements(limit = 12): Promise<RichMovement[]> {
+  const s = await server();
+  const { data, error } = await s
+    .from("movements").select("*")
+    .order("noticed_at", { ascending: false }).limit(limit);
+  if (error) return [];                            // table lands with migration 002
+  const moves = (data ?? []) as Movement[];
+  if (!moves.length) return [];
+  const playerIds = Array.from(new Set(moves.map(m => m.player_id).filter((x): x is number => x != null)));
+  const teamIds = Array.from(new Set(moves.flatMap(m => [m.team_id, m.from_team_id, m.to_team_id])
+    .filter((x): x is number => x != null)));
+  const leagueIds = Array.from(new Set(moves.flatMap(m => [m.from_league_id, m.to_league_id])
+    .filter((x): x is number => x != null)));
+  const [players, teams, leagues] = await Promise.all([
+    playerIds.length ? s.from("players").select("*").in("id", playerIds).then(r => (r.data ?? []) as Player[]) : [],
+    teamIds.length ? s.from("teams").select("*").in("id", teamIds).then(r => (r.data ?? []) as Team[]) : [],
+    leagueIds.length ? s.from("leagues").select("*").in("id", leagueIds).then(r => (r.data ?? []) as League[]) : [],
+  ]);
+  const pById = new Map(players.map(p => [p.id, p]));
+  const tById = new Map(teams.map(t => [t.id, t]));
+  const lById = new Map(leagues.map(l => [l.id, l]));
+  return moves.map(m => ({
+    ...m,
+    player: m.player_id ? pById.get(m.player_id) ?? null : null,
+    moved_team: m.team_id ? tById.get(m.team_id) ?? null : null,
+    from_team: m.from_team_id ? tById.get(m.from_team_id) ?? null : null,
+    to_team: m.to_team_id ? tById.get(m.to_team_id) ?? null : null,
+    from_league: m.from_league_id ? lById.get(m.from_league_id) ?? null : null,
+    to_league: m.to_league_id ? lById.get(m.to_league_id) ?? null : null,
+  }));
+}
+
+export interface CompetitionNext {
+  league: League;
+  next: Match;
+  scheduled: number;               // matches on the books
+}
+
+/**
+ * What's next in every competition we track — the fuel for "the road to 2030".
+ * Grouped later by league.format: qualifiers/tournaments = the international
+ * arc; leagues/cups = the weekly club heartbeat.
+ */
+export async function nextUpByCompetition(): Promise<CompetitionNext[]> {
+  const s = await server();
+  const horizon = new Date(Date.now() - 3 * 3600_000).toISOString();
+  const [matchesRes, leaguesRes] = await Promise.all([
+    s.from("matches").select("*").eq("status", "scheduled")
+      .gte("kickoff_utc", horizon).order("kickoff_utc", { ascending: true }).limit(600),
+    s.from("leagues").select("*"),
+  ]);
+  const leagues = new Map(((leaguesRes.data ?? []) as League[]).map(l => [l.id, l]));
+  const seen = new Map<number, CompetitionNext>();
+  for (const m of (matchesRes.data ?? []) as Match[]) {
+    if (!m.league_id) continue;
+    const league = leagues.get(m.league_id);
+    if (!league) continue;
+    const cur = seen.get(m.league_id);
+    if (cur) cur.scheduled += 1;
+    else seen.set(m.league_id, { league, next: m, scheduled: 1 });
+  }
+  return Array.from(seen.values()).sort((a, b) =>
+    (a.next.kickoff_utc < b.next.kickoff_utc ? -1 : 1));
 }
 
 /** Prediction + rating helpers per team (used on Team screen). */

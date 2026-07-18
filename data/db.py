@@ -40,6 +40,32 @@ def _rows(res) -> list[dict]:
     return getattr(res, "data", None) or []
 
 
+_BACKBONE: bool | None = None
+
+
+def has_backbone() -> bool:
+    """True once migration 002 (matches.phase / leagues.format / movements) is
+    applied. Lets the pipeline run against a pre-migration DB without erroring."""
+    global _BACKBONE
+    if _BACKBONE is None:
+        try:
+            client().table("matches").select("phase").limit(1).execute()
+            _BACKBONE = True
+        except Exception:
+            print("[db] migration 002 not applied yet — writing legacy columns only")
+            _BACKBONE = False
+    return _BACKBONE
+
+
+_V2_MATCH_KEYS = ("phase", "is_knockout", "season")
+
+
+def _strip_v2(rows: list[dict]) -> list[dict]:
+    if has_backbone():
+        return rows
+    return [{k: v for k, v in r.items() if k not in _V2_MATCH_KEYS} for r in rows]
+
+
 def upsert(table: str, rows: list[dict], on_conflict: str | None = None) -> list[dict]:
     if not rows:
         return []
@@ -96,16 +122,18 @@ def get_or_create_country(name: str, fifa_code: str | None = None,
 
 def get_or_create_league(name: str, country_id: int | None = None,
                          espn_slug: str | None = None, understat_slug: str | None = None,
-                         is_international: bool = False, tier: int = 1) -> int:
+                         is_international: bool = False, tier: int = 1,
+                         format: str | None = None) -> int:
     q = client().table("leagues").select("id,name,country_id").eq("name", name)
     if country_id is not None:
         q = q.eq("country_id", country_id)
     hits = _rows(q.execute())
     if hits:
-        # patch slugs if missing
+        # patch slugs / format if missing or drifted
         patch = {}
         if espn_slug: patch["espn_slug"] = espn_slug
         if understat_slug: patch["understat_slug"] = understat_slug
+        if format and has_backbone(): patch["format"] = format
         if patch:
             client().table("leagues").update(patch).eq("id", hits[0]["id"]).execute()
         return hits[0]["id"]
@@ -113,30 +141,91 @@ def get_or_create_league(name: str, country_id: int | None = None,
         "name": name, "country_id": country_id, "espn_slug": espn_slug,
         "understat_slug": understat_slug, "tier": tier, "is_international": is_international,
     }
+    if format and has_backbone():
+        row["format"] = format
     r = _rows(client().table("leagues").insert(row).execute())
     return r[0]["id"]
+
+
+@lru_cache(maxsize=1)
+def _league_formats() -> dict[int, str]:
+    cols = "id,format" if has_backbone() else "id"
+    return {l["id"]: l.get("format") or "league"
+            for l in _rows(client().table("leagues").select(cols).execute())}
+
+
+def log_movement(kind: str, *, player_id: int | None = None, team_id: int | None = None,
+                 from_team_id: int | None = None, to_team_id: int | None = None,
+                 from_league_id: int | None = None, to_league_id: int | None = None,
+                 note: str | None = None) -> None:
+    """Record a transfer / promotion-relegation event — the 'how things move' feed."""
+    if not has_backbone():
+        return
+    try:
+        client().table("movements").insert({
+            "kind": kind, "player_id": player_id, "team_id": team_id,
+            "from_team_id": from_team_id, "to_team_id": to_team_id,
+            "from_league_id": from_league_id, "to_league_id": to_league_id,
+            "note": note,
+        }).execute()
+    except Exception as e:
+        print(f"[db] movement log failed (non-fatal): {e}")
 
 
 def get_or_create_team(name: str, league_id: int | None = None,
                        country_id: int | None = None, espn_id: str | None = None,
                        fbref_id: str | None = None, is_national: bool = False,
-                       short_name: str | None = None) -> int:
-    # match on (name, league_id) — matches the schema unique constraint
-    q = client().table("teams").select("id,espn_id,fbref_id,league_id").eq("name", name)
-    if league_id is not None:
-        q = q.eq("league_id", league_id)
-    hits = _rows(q.execute())
+                       short_name: str | None = None,
+                       league_format: str | None = None) -> int:
+    """One row per real-world team, forever.
+
+    Identity: espn_id first (global natural key), then name (global — a club that
+    shows up in the Champions League is the same club that plays in its league).
+    league_id records a club's DOMESTIC home only: cup/tournament appearances never
+    reassign it, and a genuine domestic move (promotion/relegation) updates it in
+    place and logs a movement instead of forking a second row."""
+    espn_id = (espn_id or "").strip() or None
+    hits = []
+    if espn_id:
+        hits = _rows(client().table("teams")
+                     .select("id,espn_id,fbref_id,league_id,is_national").eq("espn_id", espn_id).execute())
+    if not hits:
+        q = client().table("teams").select("id,espn_id,fbref_id,league_id,is_national").eq("name", name)
+        hits = _rows(q.execute())
+        # never adopt a different club that happens to share the name: if the hit
+        # has a conflicting espn_id, treat as a distinct team
+        if hits and espn_id and hits[0].get("espn_id") and hits[0]["espn_id"] != espn_id:
+            hits = []
+
+    national = is_national or league_format in ("tournament", "qualifiers", "friendly")
+
     if hits:
+        t = hits[0]
         patch = {}
-        if espn_id and not hits[0].get("espn_id"): patch["espn_id"] = espn_id
-        if fbref_id and not hits[0].get("fbref_id"): patch["fbref_id"] = fbref_id
+        if espn_id and not t.get("espn_id"): patch["espn_id"] = espn_id
+        if fbref_id and not t.get("fbref_id"): patch["fbref_id"] = fbref_id
         if country_id: patch["country_id"] = country_id
+        if national and not t.get("is_national"): patch["is_national"] = True
+        # domestic home changes only on league->league moves (promotion/relegation)
+        if (league_id is not None and league_format == "league"
+                and not t.get("is_national") and not national):
+            old = t.get("league_id")
+            if old is None:
+                patch["league_id"] = league_id
+            elif old != league_id and _league_formats().get(old) == "league":
+                patch["league_id"] = league_id
+                log_movement("league_change", team_id=t["id"],
+                             from_league_id=old, to_league_id=league_id,
+                             note=f"{name}: domestic league change")
         if patch:
-            client().table("teams").update(patch).eq("id", hits[0]["id"]).execute()
-        return hits[0]["id"]
+            client().table("teams").update(patch).eq("id", t["id"]).execute()
+        return t["id"]
+
     row = {
-        "name": name, "league_id": league_id, "country_id": country_id,
-        "espn_id": espn_id, "fbref_id": fbref_id, "is_national": is_national,
+        "name": name,
+        "league_id": league_id if (league_format in (None, "league") and not national) else None,
+        "country_id": country_id,
+        "espn_id": espn_id, "fbref_id": fbref_id, "is_national": national,
         "short_name": short_name,
     }
     r = _rows(client().table("teams").insert(row).execute())
@@ -145,17 +234,55 @@ def get_or_create_team(name: str, league_id: int | None = None,
 
 def get_or_create_player(name: str, team_id: int | None = None,
                          country_id: int | None = None, position: str | None = None,
-                         fbref_id: str | None = None, understat_id: str | None = None) -> int:
-    q = client().table("players").select("id").eq("name", name)
-    if team_id is not None:
-        q = q.eq("team_id", team_id)
-    hits = _rows(q.execute())
+                         fbref_id: str | None = None, understat_id: str | None = None,
+                         dob: str | None = None, photo_url: str | None = None) -> int:
+    """One row per real-world player, forever.
+
+    Identity: understat_id first, then name (global). A club change updates
+    team_id in place and logs a transfer movement — it never forks a second row.
+    Guard: a name hit whose recorded country conflicts with the incoming one is
+    treated as a different person."""
+    hits = []
+    if understat_id:
+        hits = _rows(client().table("players")
+                     .select("id,team_id,country_id,position,dob,photo_url,understat_id")
+                     .eq("understat_id", understat_id).execute())
+    if not hits:
+        cand = _rows(client().table("players")
+                     .select("id,team_id,country_id,position,dob,photo_url,understat_id")
+                     .eq("name", name).execute())
+        if cand and country_id:
+            same = [p for p in cand if not p.get("country_id") or p["country_id"] == country_id]
+            cand = same or []
+        if cand and team_id:
+            cand.sort(key=lambda p: 0 if p.get("team_id") == team_id else 1)
+        hits = cand[:1]
+
     if hits:
-        return hits[0]["id"]
+        p = hits[0]
+        patch = {}
+        if country_id and not p.get("country_id"): patch["country_id"] = country_id
+        if position and not p.get("position"): patch["position"] = position
+        if dob and not p.get("dob"): patch["dob"] = dob
+        if photo_url and not p.get("photo_url"): patch["photo_url"] = photo_url
+        if understat_id and not p.get("understat_id"): patch["understat_id"] = understat_id
+        if team_id and p.get("team_id") and p["team_id"] != team_id:
+            patch["team_id"] = team_id
+            log_movement("transfer", player_id=p["id"],
+                         from_team_id=p["team_id"], to_team_id=team_id,
+                         note=f"{name}: club change")
+        elif team_id and not p.get("team_id"):
+            patch["team_id"] = team_id
+        if patch:
+            client().table("players").update(patch).eq("id", p["id"]).execute()
+        return p["id"]
+
     row = {
         "name": name, "team_id": team_id, "country_id": country_id,
         "position": position, "fbref_id": fbref_id, "understat_id": understat_id,
     }
+    if dob: row["dob"] = dob
+    if photo_url: row["photo_url"] = photo_url
     r = _rows(client().table("players").insert(row).execute())
     return r[0]["id"]
 
@@ -188,6 +315,7 @@ def upsert_matches(rows: list[dict]) -> list[dict]:
     """Upsert on espn_event_id when present, else insert. Rows already resolved
     to team_id/league_id integers. ESPN rows not yet in the table first try to
     claim an Understat placeholder so the two sources never duplicate a match."""
+    rows = _strip_v2(rows)
     with_ev = [r for r in rows if r.get("espn_event_id")]
     without = [r for r in rows if not r.get("espn_event_id")]
     out = []

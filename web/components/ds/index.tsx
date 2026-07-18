@@ -3,8 +3,8 @@
  * import from here to get permissively-typed React components. This isolates
  * the `any` cast to one place instead of at every call site.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type C = (props: any) => any;
+type C = (props: Record<string, unknown>) => React.ReactNode;
+import type React from "react";
 
 import { CompetitionBadge as _CompetitionBadge } from "./CompetitionBadge";
 import { FactorBar as _FactorBar } from "./FactorBar";

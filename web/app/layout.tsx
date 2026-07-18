@@ -6,8 +6,13 @@ import { TabBar } from "@/components/mobile/TabBar";
 import { MobileScreenPicker } from "@/components/mobile/MobileScreenPicker";
 
 export const metadata: Metadata = {
-  title: "footy-mp",
-  description: "Football tracker + xG prediction engine",
+  title: { default: "MPFC", template: "%s · MPFC" },
+  description:
+    "World football, 0→100: follow players, clubs, leagues and national teams "
+    + "from World Cup 2026 to 2030 — with an xG match model and daily AI reads.",
+  icons: { icon: "/icon.svg" },
+  manifest: "/manifest.webmanifest",
+  robots: { index: false },   // personal tool — stay out of search engines
 };
 
 export const viewport: Viewport = {

@@ -15,9 +15,17 @@ import { FormPills } from "@/components/ds";
 // @ts-ignore
 import { FactorBar } from "@/components/ds";
 import { getMatch, formLast5, factorsForTeam, poissonMatrix, getLowdown, MODEL_VERSION } from "@/lib/data";
-import { flagFor, shortNameFor, competitionCode, isPlaceholderTeam } from "@/lib/format";
+import { flagFor, shortNameFor, competitionCode, isPlaceholderTeam, phaseLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: { id: string } }) {
+  const m = await getMatch(Number(params.id));
+  if (!m) return { title: "Match" };
+  const h = m.home_team?.name ?? "TBD";
+  const a = m.away_team?.name ?? "TBD";
+  return { title: `${h} v ${a}${m.league?.name ? ` · ${m.league.name}` : ""}` };
+}
 
 export default async function MatchDetail({ params }: { params: { id: string } }) {
   const id = Number(params.id);
@@ -43,11 +51,14 @@ export default async function MatchDetail({ params }: { params: { id: string } }
   const pD = pred?.p_draw != null ? Math.round(Number(pred.p_draw) * 100) : null;
   const pA = pH != null && pD != null ? 100 - pH - pD : null;
   const verdict = verdictLine(m);
+  const phase = phaseLabel(m.phase);
+  const knockoutOdds = pred && m.is_knockout && !isFinal
+    && pred.p_advance_home != null;
 
   return (
     <div>
       <ScreenHeader
-        eyebrow={compName}
+        eyebrow={[compName, phase, m.season].filter(Boolean).join(" · ")}
         title={`${home ? shortNameFor(home.name) : "TBD"} v ${away ? shortNameFor(away.name) : "TBD"}`}
       />
       <Pad style={{ paddingTop: 14 }}>
@@ -99,6 +110,43 @@ export default async function MatchDetail({ params }: { params: { id: string } }
                 value={`${Number(pred.home_xg ?? 0).toFixed(2)}–${Number(pred.away_xg ?? 0).toFixed(2)}`} />
               <StatCard label="model" value={MODEL_VERSION.replace("footy-mp-", "")} unit=" · xG Dixon-Coles" />
             </div>
+
+            {knockoutOdds && (
+              <>
+                <SectionHeading tick="var(--gold)">If it stays level</SectionHeading>
+                <div style={{
+                  background: "var(--surface-panel)", border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-xl)", padding: "12px 14px",
+                }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
+                    <div>
+                      <div style={{ ...mono, fontSize: "var(--fs-h2)", fontWeight: 700, color: "var(--gold)" }}>
+                        {Math.round(Number(pred.p_advance_home) * 100)}%
+                      </div>
+                      <div style={{ ...eyebrow, marginTop: 3 }}>
+                        {home ? shortNameFor(home.name) : "home"} advance
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ ...mono, fontSize: "var(--fs-h2)", fontWeight: 700 }}>
+                        {pred.p_et != null ? `${Math.round(Number(pred.p_et) * 100)}%` : "—"}
+                      </div>
+                      <div style={{ ...eyebrow, marginTop: 3 }}>extra time</div>
+                    </div>
+                    <div>
+                      <div style={{ ...mono, fontSize: "var(--fs-h2)", fontWeight: 700 }}>
+                        {pred.p_pens != null ? `${Math.round(Number(pred.p_pens) * 100)}%` : "—"}
+                      </div>
+                      <div style={{ ...eyebrow, marginTop: 3 }}>penalties</div>
+                    </div>
+                  </div>
+                  <div style={{ ...eyebrow, marginTop: 9, textAlign: "center" }}>
+                    knockout math: 90 minutes → extra time → shootout, incl. each side&apos;s
+                    shootout record + nerves
+                  </div>
+                </div>
+              </>
+            )}
             {verdict && (
               <div style={{
                 marginTop: 10, padding: "10px 12px",

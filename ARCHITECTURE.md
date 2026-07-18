@@ -164,14 +164,39 @@ footy-mp/
 
 ---
 
-## 8. Known limitations / next bets
+## 8. The 2026→2030 backbone (added July 2026 — see AUDIT.md)
+
+- **Competition registry** (`data/normalize.py::LEAGUES`) is the single source of
+  truth: 27 competitions with ESPN/Understat slugs, `format`
+  (league/cup/tournament/qualifiers/friendly), season style (cross-year vs
+  calendar vs tournament-year), and tier. Adding a competition = one line.
+- **Identity continuity**: teams resolve by `espn_id` → global name; players by
+  `understat_id` → global name. Cup appearances never fork a club; transfers and
+  promotion/relegation update in place and log to `movements`.
+- **Real match semantics**: `matches.phase` (ESPN `season.slug`) +
+  `matches.is_knockout` + `leagues.format` drive the model's neutral-venue and
+  ET/pens decisions (tournaments neutral; club cups only at the final;
+  two-legged rounds are not single-match knockouts). `matches.season` stamps
+  every row.
+- **The 0→100 layer**: `/map` (how the sport's layers interlock + road to 2030),
+  club↔country squad webs on team/country pages (fed by the weekly `rosters`
+  ingest of every national-team squad), movement feed + road-to-2030 module on
+  Today, knockout odds surfaced on match pages.
+- **Security**: RLS on all tables (anon = read-only); writes only via
+  service-role server routes with same-origin guards; no auth middleware (single
+  user by design — use Vercel Deployment Protection if the app should go private).
+
+## 9. Known limitations / next bets
 
 - **Understat covers the big-5 only** — player stats and xG beyond those leagues need
   another source (FBref currently CAPTCHA-blocks scrapers; revisit politely or find an API).
+  Everything else runs goals-based — fine for the model, thin for player pages.
 - **Availability adjustment deferred** — no free injury feed; capture ESPN pre-match
   lineups via the live cron as the path in.
+- **Intl group tables not rendered yet** — ESPN carries group labels per event;
+  ingest them, then render qualifying tables per confederation (top of the M6 list).
 - **Historical placeholder kickoffs** — pre-2025-26 club matches came from Understat
   with synthetic 15:00Z kickoff times; ESPN sweeps claim/fix them season by season
   (2025-26 done).
-- **Single user** — `follows.user_id` hardcoded to `mp`; auth plumbing (@supabase/ssr)
-  is wired but ungated.
+- **Single user** — `follows.user_id` hardcoded to `mp` on the server; RLS keeps
+  the anon key read-only.

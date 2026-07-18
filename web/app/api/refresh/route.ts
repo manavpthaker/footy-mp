@@ -1,29 +1,39 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { adminClient, sameOrigin } from "@/lib/admin";
 
 /**
- * On-demand score refresh. Pulls the ESPN scoreboard for yesterday/today/
- * tomorrow across our leagues and updates matches we already know
- * (matched by espn_event_id) — status, score, minute, ET/pens. It never
- * creates teams or matches; the Python pipeline owns entity resolution,
- * model runs, and lowdowns. This is the "is the score current" fast path
- * behind the header refresh button.
+ * On-demand score refresh. Figures out which competitions actually have
+ * matches around now (±1 day), pulls just those ESPN scoreboards, and
+ * updates matches we already know (matched by espn_event_id) — status,
+ * score, minute, ET/pens. It never creates teams or matches; the Python
+ * pipeline owns entity resolution, model runs, and lowdowns. This is the
+ * "is the score current" fast path behind the header refresh button.
  */
 
 export const dynamic = "force-dynamic";
 
-const SLUGS = [
+// fallback when the DB lookup fails
+const CORE_SLUGS = [
   "fifa.world", "eng.1", "esp.1", "ita.1", "ger.1", "fra.1",
   "uefa.champions", "uefa.europa",
 ];
 
 let lastRun = 0; // per-instance throttle; good enough for a single-user app
 
-function adminClient() {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false } });
+/** Only hit scoreboards that can actually have news: leagues with a match
+ *  inside ±1 day. Usually 1–4 slugs instead of the whole registry. */
+async function activeSlugs(supabase: NonNullable<ReturnType<typeof adminClient>>): Promise<string[]> {
+  const lo = new Date(Date.now() - 36 * 3600_000).toISOString();
+  const hi = new Date(Date.now() + 36 * 3600_000).toISOString();
+  const { data: ms } = await supabase
+    .from("matches").select("league_id")
+    .gte("kickoff_utc", lo).lte("kickoff_utc", hi).limit(500);
+  const ids = Array.from(new Set((ms ?? []).map((m: any) => m.league_id).filter(Boolean)));
+  if (!ids.length) return [];
+  const { data: ls } = await supabase
+    .from("leagues").select("espn_slug").in("id", ids);
+  const slugs = (ls ?? []).map((l: any) => l.espn_slug).filter(Boolean);
+  return slugs.length ? slugs : CORE_SLUGS;
 }
 
 function utcDates(): string[] {
@@ -71,7 +81,10 @@ function parseEvent(ev: any): EspnUpdate | null {
   };
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+  }
   if (Date.now() - lastRun < 30_000) {
     return NextResponse.json({ ok: true, throttled: true, updated: 0 });
   }
@@ -82,9 +95,14 @@ export async function POST() {
     return NextResponse.json({ ok: false, error: "server not configured" }, { status: 500 });
   }
 
+  const slugs = await activeSlugs(supabase);
+  if (!slugs.length) {
+    return NextResponse.json({ ok: true, updated: 0, idle: true });
+  }
+
   const updates = new Map<string, EspnUpdate>();
   await Promise.allSettled(
-    SLUGS.flatMap(slug => utcDates().map(async date => {
+    slugs.flatMap(slug => utcDates().map(async date => {
       const res = await fetch(
         `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${date}`,
         { cache: "no-store" },

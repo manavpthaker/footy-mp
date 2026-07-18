@@ -59,27 +59,61 @@ export function isPlaceholderTeam(name?: string | null): boolean {
 }
 
 export function competitionTone(name: string): "gold" | "sky" | "pitch" | "neutral" {
-  if (name === "World Cup" || name === "Champions League" || name === "Euros" || name === "Copa America") return "gold";
+  if (name === "World Cup" || name === "Champions League" || name === "Euros"
+      || name === "Copa America" || name === "Africa Cup of Nations"
+      || name === "Gold Cup" || name === "Copa Libertadores") return "gold";
+  if (name.startsWith("WC Qualifying") || name === "UEFA Nations League") return "gold";
   if (name === "Premier League" || name === "La Liga" || name === "Serie A"
       || name === "Bundesliga" || name === "Ligue 1" || name === "Europa League"
-      || name === "Primeira Liga") return "sky";
-  if (name === "Liga MX" || name === "Categoría Primera A") return "pitch";
+      || name === "Primeira Liga" || name === "Eredivisie" || name === "Championship") return "sky";
+  if (name === "Liga MX" || name === "Categoría Primera A" || name === "MLS") return "pitch";
   return "neutral";
 }
 
 export function competitionCode(name: string): string {
+  if (name.startsWith("WC Qualifying")) return "WCQ";
   switch (name) {
     case "World Cup": return "WC";
     case "Champions League": return "CL";
     case "Europa League": return "EL";
+    case "Copa Libertadores": return "LIB";
     case "Premier League": return "PL";
     case "La Liga": return "LL";
     case "Serie A": return "SA";
     case "Bundesliga": return "BL";
     case "Ligue 1": return "L1";
+    case "Championship": return "CH";
+    case "Eredivisie": return "ED";
     case "Liga MX": return "MX";
+    case "MLS": return "MLS";
     case "Primeira Liga": return "LP";
     case "Categoría Primera A": return "CO";
+    case "Africa Cup of Nations": return "AFC";
+    case "Gold Cup": return "GC";
+    case "UEFA Nations League": return "UNL";
+    case "Int. Friendlies": return "FR";
     default: return name.slice(0, 2).toUpperCase();
+  }
+}
+
+/** 'group-stage' -> 'Group stage', 'semifinals' -> 'Semifinals'. League-season
+ *  slugs ('2025-26-english-premier-league', 'regular-season') return null —
+ *  a phase chip on a league game is noise. */
+export function phaseLabel(phase?: string | null): string | null {
+  if (!phase) return null;
+  if (/^\d{4}/.test(phase) || /regular-season|torneo/.test(phase)) return null;
+  const words = phase.replace(/-/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** How competitions relate — used to group "what's next" on Today + The Map. */
+export function formatLabel(format?: string | null): string {
+  switch (format) {
+    case "league": return "Domestic leagues";
+    case "cup": return "Continental cups";
+    case "tournament": return "Tournaments";
+    case "qualifiers": return "Road to the World Cup";
+    case "friendly": return "Friendlies";
+    default: return "Other";
   }
 }

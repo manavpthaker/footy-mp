@@ -4,23 +4,27 @@ name: ingest
 # Secrets required: SUPABASE_URL, SUPABASE_SERVICE_KEY.
 #
 #   daily (06:00 UTC)  — ESPN results/fixtures + current-season Understat xG,
-#                        then the model pipeline (ratings + predictions).
+#                        then the BACKTEST GATE, then the model pipeline
+#                        (ratings + predictions), then lowdowns.
 #   live  (every 15m)  — cheap ESPN refresh; the script exits immediately
 #                        unless a match is live or kicking off within ±3h.
+#   rosters (Mon 07:00)— national-team squads: nationality/DOB/club links +
+#                        transfer detection for the club↔country web.
 #   workflow_dispatch  — run any pipeline mode by hand (backfill, seed,
-#                        model, backtest, ...).
+#                        model, backtest, rosters, seasons, ...).
 
 on:
   schedule:
-    - cron: "0 6 * * *"     # daily: overnight results + xG + model refresh
+    - cron: "0 6 * * *"     # daily: overnight results + xG + gate + model refresh
     - cron: "*/15 * * * *"  # live: guarded inside data/pipeline.py
+    - cron: "0 7 * * 1"     # rosters: weekly, Monday 07:00 UTC
   workflow_dispatch:
     inputs:
       mode:
         description: "Pipeline mode"
         type: choice
         default: daily
-        options: [daily, live, backfill, seed, model, backtest, players, lowdown]
+        options: [daily, live, backfill, seed, model, backtest, players, lowdown, rosters, seasons]
       backfill_seasons:
         description: "Understat season codes for backfill mode (comma-separated)"
         required: false
@@ -39,6 +43,7 @@ jobs:
     # scheduled 06:00 run, or manual dispatch in daily mode
     if: github.event.schedule == '0 6 * * *' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'daily')
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,14 +53,19 @@ jobs:
           cache-dependency-path: data/requirements.txt
       - name: Install deps
         run: pip install -r data/requirements.txt
+      - name: Cache key (daily rotation — exact hit on same-day reruns)
+        id: cachedate
+        run: echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
       - name: Cache soccerdata (Understat/FBref pages)
         uses: actions/cache@v4
         with:
           path: ~/soccerdata
-          key: soccerdata-${{ github.run_id }}
+          key: soccerdata-${{ steps.cachedate.outputs.date }}
           restore-keys: soccerdata-
       - name: Ingest (ESPN + Understat)
         run: python -m data.pipeline daily
+      - name: Backtest gate (model must beat baseline before it ships)
+        run: python -m data.pipeline backtest
       - name: Model (ratings + predictions)
         run: python -m data.pipeline model
       - name: Lowdown (match commentary)
@@ -67,6 +77,7 @@ jobs:
     # every 15 minutes; data/pipeline.py exits 0 early outside match windows
     if: github.event.schedule == '*/15 * * * *' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'live')
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -81,10 +92,28 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python -m data.pipeline live
 
+  rosters:
+    # weekly: squads, nationalities, club links, transfer detection
+    if: github.event.schedule == '0 7 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: data/requirements.txt
+      - name: Install deps
+        run: pip install -r data/requirements.txt
+      - name: National-team rosters
+        run: python -m data.pipeline rosters
+
   manual:
-    # any other hand-run mode: backfill / seed / model / backtest
+    # any other hand-run mode: backfill / seed / model / backtest / rosters / seasons
     if: github.event_name == 'workflow_dispatch' && !contains(fromJSON('["daily","live"]'), inputs.mode)
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

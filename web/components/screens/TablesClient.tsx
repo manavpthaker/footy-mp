@@ -20,7 +20,7 @@ export function TablesClient({ payload }: { payload: Bundle[] }) {
 
   if (!payload.length) {
     return <Pad style={{ paddingTop: 20 }}>
-      <EmptyState>Standings will appear once we've ingested at least one full season.</EmptyState>
+      <EmptyState>Standings appear once this competition has finished matches this season.</EmptyState>
     </Pad>;
   }
 

@@ -111,3 +111,18 @@ input, select, textarea { font-family: inherit; color: inherit; }
   from { opacity: 0; transform: translateY(9px); }
   to   { opacity: 1; transform: none; }
 }
+
+/* skeleton shimmer for loading.tsx states */
+.fmp-skel {
+  background: linear-gradient(100deg,
+    var(--surface-panel) 40%, var(--surface-tint) 50%, var(--surface-panel) 60%);
+  background-size: 200% 100%;
+  border: 1px solid var(--border);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fmp-skel { animation: fmpShimmer 1.4s ease-in-out infinite; }
+}
+@keyframes fmpShimmer {
+  from { background-position: 120% 0; }
+  to   { background-position: -80% 0; }
+}

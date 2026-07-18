@@ -36,8 +36,27 @@ from datetime import datetime, timedelta, timezone
 from data import db
 
 LOWDOWN_VERSION = "lowdown-v1"
-GEN_MODEL = "claude-opus-4-8"
+# Hybrid model split: the four analyst passes are structured data-reads — Sonnet
+# handles them at ~1/5 the cost. Opus writes only the final synthesized voice.
+GEN_MODEL = os.environ.get("LOWDOWN_GEN_MODEL", "claude-opus-4-8")
+ANALYST_MODEL = os.environ.get("LOWDOWN_ANALYST_MODEL", "claude-sonnet-5")
+# Hard ceiling on LLM calls per run (a pre-match lowdown = 5 calls). The runner
+# stops cleanly when the budget is spent and picks up next run.
+MAX_LLM_CALLS = int(os.environ.get("LOWDOWN_MAX_CALLS") or 60)
 MODEL_VERSION = "footy-mp-v2"  # which predictions/ratings feed the dossier
+
+_calls_made = 0
+
+
+class _BudgetExhausted(Exception):
+    pass
+
+
+def _spend_call() -> None:
+    global _calls_made
+    if _calls_made >= MAX_LLM_CALLS:
+        raise _BudgetExhausted()
+    _calls_made += 1
 
 
 # ------------------------------ dossier ------------------------------
@@ -327,8 +346,9 @@ def _client():
 
 
 def _ask(client, system: str, user: str, max_tokens: int = 1200) -> str:
+    _spend_call()
     resp = client.messages.create(
-        model=GEN_MODEL,
+        model=ANALYST_MODEL,
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user}],
@@ -398,6 +418,7 @@ def generate_lowdown(dossier: dict, state: str = "pre") -> dict | None:
 
 
 def _synthesize(client, system: str, prompt: str, max_tokens: int) -> dict | None:
+    _spend_call()
     resp = client.messages.create(
         model=GEN_MODEL,
         max_tokens=max_tokens,
@@ -505,6 +526,10 @@ def run(days_ahead: int = 7, limit: int | None = None,
         label = f"{dossier['fixture']['home']} vs {dossier['fixture']['away']} [{state}]"
         try:
             out = generate_lowdown(dossier, state)
+        except _BudgetExhausted:
+            print(f"[lowdown] call budget ({MAX_LLM_CALLS}) spent — stopping; "
+                  f"remaining matches pick up next run")
+            break
         except Exception as e:
             print(f"[lowdown] {label}: generation failed: {e}")
             failed += 1

@@ -2,13 +2,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const TABS = [
-  { id: "today",     glyph: "◆", label: "Today",     href: "/" },
-  { id: "matches",   glyph: "⏱", label: "Matches",   href: "/matches" },
-  { id: "tables",    glyph: "≣", label: "Tables",    href: "/tables" },
-  { id: "following", glyph: "★", label: "Following", href: "/following" },
-];
+import { TABS } from "./tabs";
 
 /**
  * Bottom tab bar. Sticky, always visible, 48px hit targets, 18px safe-area pad.
@@ -26,7 +20,7 @@ export function TabBar() {
       paddingBottom: "max(10px, env(safe-area-inset-bottom))",
     }}>
       <div className="fmp-cap" style={{
-        display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+        display: "grid", gridTemplateColumns: `repeat(${TABS.length}, 1fr)`,
       }}>
       {TABS.map(t => {
         const on = t.id === activeId;

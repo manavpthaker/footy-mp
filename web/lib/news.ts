@@ -30,7 +30,7 @@ function tag(block: string, name: string): string | null {
 }
 
 /** Parse the handful of RSS fields we need — no XML dependency. */
-function parseRss(xml: string, limit: number): NewsItem[] {
+function parseRss(xml: string): NewsItem[] {
   const items: NewsItem[] = [];
   for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
     const block = m[1];
@@ -44,21 +44,27 @@ function parseRss(xml: string, limit: number): NewsItem[] {
       source: tag(block, "source"),
       publishedAt: pub ? new Date(pub).toISOString() : null,
     });
-    if (items.length >= limit) break;
   }
   return items;
 }
 
-async function fetchRss(query: string, limit: number): Promise<NewsItem[]> {
+/**
+ * Google News sorts search feeds by RELEVANCE, not recency — without a window
+ * a strong two-week-old story outranks yesterday's. So every query carries a
+ * `when:` window, and we re-sort by pubDate ourselves before slicing.
+ */
+async function fetchRss(query: string, limit: number, when: string): Promise<NewsItem[]> {
   const url = "https://news.google.com/rss/search?q="
-    + encodeURIComponent(query) + "&hl=en-US&gl=US&ceid=US:en";
+    + encodeURIComponent(`${query} when:${when}`) + "&hl=en-US&gl=US&ceid=US:en";
   try {
     const res = await fetch(url, {
       next: { revalidate: REVALIDATE_SECONDS },
       headers: { "User-Agent": "footy-mp/1.0" },
     });
     if (!res.ok) return [];
-    return parseRss(await res.text(), limit);
+    return parseRss(await res.text())
+      .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+      .slice(0, limit);
   } catch {
     return [];
   }
@@ -66,23 +72,23 @@ async function fetchRss(query: string, limit: number): Promise<NewsItem[]> {
 
 /** The general wire: transfers, managerial moves, the big storylines. */
 export async function generalFootballNews(limit = 20): Promise<NewsItem[]> {
-  return fetchRss('soccer football (transfer OR signing OR manager OR "World Cup" OR final)', limit);
+  return fetchRss('soccer football (transfer OR signing OR manager OR "World Cup" OR final)', limit, "2d");
 }
 
 /** News for one team. Quote the name; add "football" so e.g. "Arsenal" stays on-topic. */
 export async function newsForTeam(teamName: string, limit = 6): Promise<NewsItem[]> {
-  return fetchRss(`"${teamName}" football`, limit);
+  return fetchRss(`"${teamName}" football`, limit, "7d");
 }
 
 /** News for one player, anchored by their club/country when we know it. */
 export async function newsForPlayer(playerName: string, teamName?: string | null, limit = 6): Promise<NewsItem[]> {
   const anchor = teamName ? ` "${teamName}"` : " football";
-  return fetchRss(`"${playerName}"${anchor}`, limit);
+  return fetchRss(`"${playerName}"${anchor}`, limit, "14d");
 }
 
 /** News for a competition. */
 export async function newsForLeague(leagueName: string, limit = 8): Promise<NewsItem[]> {
-  return fetchRss(`"${leagueName}" football`, limit);
+  return fetchRss(`"${leagueName}" football`, limit, "7d");
 }
 
 export function timeAgo(iso: string | null): string | null {

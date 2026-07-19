@@ -3,6 +3,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RefreshButton } from "./RefreshButton";
+import { SearchChat } from "@/components/search/SearchChat";
 import { TABS } from "./tabs";
 
 /**
@@ -12,6 +13,7 @@ import { TABS } from "./tabs";
  * only nav; there is no separate TopNav.
  */
 export function AppHeader() {
+  const [searchOpen, setSearchOpen] = React.useState(false);
   const pathname = usePathname() || "/";
   const seg = pathname === "/" ? "today" : pathname.split("/")[1];
   const activeId = TABS.some(t => t.id === seg) ? seg : detailToTab(pathname);
@@ -71,6 +73,12 @@ export function AppHeader() {
           })}
         </nav>
         <div style={{ flex: 1 }} />
+        <button onClick={() => setSearchOpen(true)} aria-label="Search & ask" style={{
+          background: "transparent", border: "1px solid var(--border)",
+          borderRadius: "var(--radius-md)", color: "var(--text-muted)",
+          fontSize: 14, lineHeight: 1, padding: "7px 10px", cursor: "pointer",
+          marginRight: 8,
+        }}>⌕</button>
         <RefreshButton />
         <div className="fmp-desktop-only" style={{
           fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
@@ -79,6 +87,7 @@ export function AppHeader() {
           fontWeight: "var(--fw-semibold)",
         }}>{today}</div>
       </div>
+      {searchOpen && <SearchChat onClose={() => setSearchOpen(false)} />}
     </header>
   );
 }

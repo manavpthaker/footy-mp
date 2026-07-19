@@ -59,7 +59,10 @@ export default async function LeagueDetail({ params }: { params: { id: string } 
         )}
         {rows.length > 0 && (
           <>
-            <SectionHeading>Standings</SectionHeading>
+            <SectionHeading>
+              Standings{standings.season ? ` · ${standings.season}` : ""}
+              {standings.complete ? " · final" : ""}
+            </SectionHeading>
             <LeagueStandings rows={JSON.parse(JSON.stringify(rows))} />
           </>
         )}

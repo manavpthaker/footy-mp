@@ -18,7 +18,7 @@ import type { Player, Team } from "@/lib/supabase";
 
 export function TeamClient({
   team, rating, form, factors, players, upcoming, results, followedTeamIds,
-  keyPlayerIds = [],
+  keyPlayerIds = [], playerCountryNames = {},
 }: {
   team: Team;
   rating: { att: number; def: number; overall: number | null } | null;
@@ -29,6 +29,8 @@ export function TeamClient({
   results: RichMatch[];
   followedTeamIds: number[];
   keyPlayerIds?: number[];
+  /** player id → nationality name, for the squad sub-line */
+  playerCountryNames?: Record<number, string>;
 }) {
   const [tab, setTab] = React.useState<"matches" | "squad" | "model">("matches");
   const followedSet = React.useMemo(() => new Set(followedTeamIds), [followedTeamIds]);
@@ -83,7 +85,7 @@ export function TeamClient({
           ? players.map(p => (
               <Link key={p.id} href={`/players/${p.id}`} style={{ textDecoration: "none", color: "inherit" }}>
                 <PlayerCard lead={p.position ?? "—"} name={p.name}
-                  club={`${p.position ?? "—"} · ${team.is_national ? "national" : ""}`}
+                  club={[p.position, playerCountryNames[p.id]].filter(Boolean).join(" · ") || "—"}
                   isKey={keyPlayerIds.includes(p.id)} />
               </Link>
             ))

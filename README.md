@@ -31,7 +31,7 @@ data/
 .github/workflows/
   ingest.yml               daily (gate→model) · guarded 15-min live · weekly rosters
   web.yml                  Next.js build check
-web/                       Next.js app — 5-tab shell (incl. The Map), rail+detail
+web/                       Next.js app — 6-tab shell (incl. The Map + News wire), rail+detail
 ```
 
 ## Status

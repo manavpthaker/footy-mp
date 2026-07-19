@@ -289,6 +289,8 @@ export interface LeagueTableRow {
   team: string;
   teamId: number;
   flag: string;
+  /** crest data for the badge image (crest_url / espn_id) — see Crest.tsx */
+  crest: { name: string; crest_url: string | null; espn_id: string | null; is_national: boolean } | null;
   followed: boolean;
   pos: number;
   P: number; W: number; D: number; L: number; GF: number; GA: number; GD: number; Pts: number;
@@ -304,18 +306,40 @@ const ZONE_RULES: Record<string, { ucl?: number; uel?: number; conf?: number; re
   "Ligue 1":        { ucl: 3, uel: 4, conf: 5, releg: -2 },
 };
 
-export async function standingsForLeague(leagueId: number): Promise<{ league: League | null; rows: LeagueTableRow[] }> {
+export async function standingsForLeague(leagueId: number): Promise<{
+  league: League | null; rows: LeagueTableRow[];
+  /** season label the table covers ('2025-26' / '2026') */
+  season: string | null;
+  /** true once the season has no scheduled matches left — the table is FINAL
+   *  standings, not a live race */
+  complete: boolean;
+}> {
   const league = await getLeague(leagueId);
-  if (!league) return { league: null, rows: [] };
+  if (!league) return { league: null, rows: [], season: null, complete: false };
   const s = await server();
-  const [matchesRes, teamsRes, followsRes] = await Promise.all([
-    // season-scoped: a table is one season, not the whole match archive
+  const [finalsRes, schedRes, teamsRes, followsRes] = await Promise.all([
+    // newest first so the 1000-row page always contains the current season
     s.from("matches").select("*").eq("league_id", leagueId).eq("status", "final")
-      .gte("kickoff_utc", seasonStartIso()),
+      .order("kickoff_utc", { ascending: false }).limit(1000),
+    s.from("matches").select("id,season,kickoff_utc").eq("league_id", leagueId)
+      .eq("status", "scheduled").order("kickoff_utc", { ascending: true }).limit(500),
     s.from("teams").select("*").eq("league_id", leagueId),
     s.from("follows").select("*").eq("user_id", USER_ID).eq("entity_type", "team"),
   ]);
-  const matches = (matchesRes.data ?? []) as Match[];
+  const finals = (finalsRes.data ?? []) as Match[];
+  const sched = (schedRes.data ?? []) as Array<{ season: string | null }>;
+
+  // Which season is "current" for THIS league? The season of its most recent
+  // result — never a date heuristic (calendar leagues like MLS and tournament
+  // years don't share the European Aug–May clock). Once next season's results
+  // start landing, the table rolls over automatically; until then last
+  // season's table shows as explicit FINAL standings, not as a live race.
+  const season = finals.find(m => m.season)?.season ?? sched.find(x => x.season)?.season ?? null;
+  const complete = season != null && !sched.some(x => x.season === season);
+  const matches = season
+    ? finals.filter(m => m.season === season)
+    // legacy rows without a stamped season: fall back to the old date gate
+    : finals.filter(m => m.kickoff_utc >= seasonStartIso());
   const teams = (teamsRes.data ?? []) as Team[];
   const followedIds = new Set((followsRes.data ?? []).map((f: any) => f.entity_id));
   const tById = new Map(teams.map(t => [t.id, t]));
@@ -360,7 +384,11 @@ export async function standingsForLeague(leagueId: number): Promise<{ league: Le
       return {
         team: t.name,
         teamId: id,
-        flag: "⚽", // resolved at render time via format.flagFor
+        flag: "⚽", // emoji fallback — the badge renders from `crest` when possible
+        crest: {
+          name: t.name, crest_url: t.crest_url ?? null,
+          espn_id: t.espn_id ?? null, is_national: !!t.is_national,
+        },
         followed: followedIds.has(id),
         pos: 0,
         P: st.P, W: st.W, D: st.D, L: st.L, GF: st.GF, GA: st.GA,
@@ -382,7 +410,25 @@ export async function standingsForLeague(leagueId: number): Promise<{ league: Le
     else if (rules.conf && i < rules.conf) r.zone = "conf";
     else if (rules.releg && i >= n + rules.releg) r.zone = "releg";
   });
-  return { league, rows };
+  return { league, rows, season, complete };
+}
+
+/** Bulk league lookup, keyed by id. */
+export async function leaguesByIds(ids: Array<number | null | undefined>): Promise<Record<number, League>> {
+  const clean = Array.from(new Set(ids.filter((x): x is number => x != null)));
+  if (!clean.length) return {};
+  const s = await server();
+  const { data } = await s.from("leagues").select("*").in("id", clean);
+  return Object.fromEntries(((data ?? []) as League[]).map(l => [l.id, l]));
+}
+
+/** Bulk team lookup, keyed by id (e.g. player rows → their clubs). */
+export async function teamsByIds(ids: Array<number | null | undefined>): Promise<Record<number, Team>> {
+  const clean = Array.from(new Set(ids.filter((x): x is number => x != null)));
+  if (!clean.length) return {};
+  const s = await server();
+  const { data } = await s.from("teams").select("*").in("id", clean);
+  return Object.fromEntries(((data ?? []) as Team[]).map(t => [t.id, t]));
 }
 
 const FALLBACK_TABLE_LEAGUES = ["Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1"];

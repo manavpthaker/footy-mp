@@ -60,6 +60,8 @@ def fetch_day(slug: str, yyyymmdd: str) -> list[dict]:
             "away": away["team"].get("displayName"),
             "home_espn_id": home["team"].get("id"),
             "away_espn_id": away["team"].get("id"),
+            "home_logo": home["team"].get("logo"),
+            "away_logo": away["team"].get("logo"),
             "kickoff_utc": ev.get("date"),
             "status": {"pre": "scheduled", "in": "live", "post": "final"}.get(state, "scheduled"),
             "minute": _minute(comp),
@@ -126,10 +128,13 @@ def fetch_team_core(team_espn_id: str) -> dict | None:
     except Exception as e:
         print(f"[espn] core team {team_espn_id} error: {e}")
         return None
+    logos = data.get("logos") or []
     return {
         "espn_id": str(data.get("id") or team_espn_id),
         "name": data.get("displayName") or data.get("name"),
         "short_name": data.get("shortDisplayName") or data.get("abbreviation"),
+        "crest_url": (logos[0].get("href") if logos and isinstance(logos[0], dict)
+                      else None),
     }
 
 

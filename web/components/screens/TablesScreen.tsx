@@ -14,6 +14,8 @@ export default async function TablesPage() {
     .map(x => ({
       leagueId: x.league!.id,
       leagueName: x.league!.name,
+      season: x.season,
+      complete: x.complete,
       rows: x.rows.map(r => ({ ...r, flag: flagFor(r.team) })),
     }));
   return (

@@ -9,8 +9,11 @@ import { TeamClient } from "./TeamClient";
 import {
   getTeam, getLeague, upcomingForTeams, recentResultsForTeams,
   latestRatingForTeam, playersOnTeam, formLast5, factorsForTeam,
-  listFollows, keyPlayerIds, squadByNationality, squadByClub,
+  listFollows, keyPlayerIds, squadByNationality, squadByClub, countriesByIds,
 } from "@/lib/data";
+import { newsForTeam } from "@/lib/news";
+import { NewsList } from "@/components/ds/NewsList";
+import { Crest } from "@/components/ds/Crest";
 import { FollowToggle } from "@/components/mobile/FollowToggle";
 import { flagFor } from "@/lib/format";
 
@@ -26,7 +29,7 @@ export default async function TeamDetail({ params }: { params: { id: string } })
   const team = await getTeam(id);
   if (!team) notFound();
 
-  const [league, upcoming, results, rating, players, form, factors, follows, keyIds, nationalities, ntSquad] = await Promise.all([
+  const [league, upcoming, results, rating, players, form, factors, follows, keyIds, nationalities, ntSquad, news] = await Promise.all([
     team.league_id ? getLeague(team.league_id) : Promise.resolve(null),
     upcomingForTeams([id], 10),
     recentResultsForTeams([id], 12),
@@ -38,8 +41,11 @@ export default async function TeamDetail({ params }: { params: { id: string } })
     keyPlayerIds(id),
     team.is_national ? Promise.resolve([]) : squadByNationality(id),
     team.is_national && team.country_id ? squadByClub(team.country_id) : Promise.resolve([]),
+    newsForTeam(team.name, 6),
   ]);
   const followed = follows.some(f => f.entity_type === "team" && f.entity_id === id);
+  const playerCountries = await countriesByIds(
+    players.map(p => p.country_id).filter((x): x is number => x != null));
 
   const overall = rating?.overall != null
     ? Math.max(0, Math.min(99, Math.round(50 + Number(rating.overall) * 25)))
@@ -49,7 +55,9 @@ export default async function TeamDetail({ params }: { params: { id: string } })
     <div>
       <ScreenHeader
         eyebrow={team.is_national ? "National team" : league?.name ?? ""}
-        title={<span>{flagFor(team.name)} {team.name}</span>}
+        title={<span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+          <Crest team={team} size={20} /> {team.name}
+        </span>}
         right={<FollowToggle entityType="team" entityId={id} initialFollowed={followed} />}
       />
       <TeamClient
@@ -58,11 +66,22 @@ export default async function TeamDetail({ params }: { params: { id: string } })
         form={form}
         factors={factors}
         players={JSON.parse(JSON.stringify(players))}
+        playerCountryNames={JSON.parse(JSON.stringify(Object.fromEntries(
+          players.filter(p => p.country_id != null && playerCountries[p.country_id!])
+            .map(p => [p.id, playerCountries[p.country_id!].name]))))}
         keyPlayerIds={keyIds}
         upcoming={JSON.parse(JSON.stringify(upcoming))}
         results={JSON.parse(JSON.stringify(results))}
         followedTeamIds={[id]}
       />
+
+      {/* What's being said — trades, injuries, drama around this team */}
+      {news.length > 0 && (
+        <Pad>
+          <SectionHeading tick="var(--accent)">In the news</SectionHeading>
+          <NewsList items={news} />
+        </Pad>
+      )}
 
       {/* The ecosystem angle: who this squad answers to internationally… */}
       {nationalities.length > 0 && (

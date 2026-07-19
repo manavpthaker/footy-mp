@@ -70,14 +70,29 @@ input, select, textarea { font-family: inherit; color: inherit; }
 /* hide horizontal-scroll chip rail scrollbars */
 .fmp-chip-rail::-webkit-scrollbar { display: none; }
 
-/* responsive visibility utilities */
+/* responsive visibility utilities.
+   NOTE: never pair these classes with an inline `style={{ display: ... }}` —
+   inline styles outrank the media query and the element will leak into the
+   wrong viewport (this exact bug once put the desktop tab strip on phones
+   and forced the whole page into horizontal scroll). */
 .fmp-desktop-only { display: none; }
-.fmp-mobile-only  { display: initial; }
+/* block, not `initial` — `initial` resolves display to inline, which breaks
+   .fmp-scroll's flex/overflow box model on phones */
+.fmp-mobile-only  { display: block; }
+
+/* header tab strip: hidden on mobile (nav lives in the bottom TabBar),
+   inline flex row on desktop */
+.fmp-header-nav { display: none; }
+
+/* phones must never pan sideways — any wide block (scoreline grids, tables)
+   scrolls inside its own container instead */
+body { overflow-x: hidden; }
 
 /* ---------- desktop breakpoint ---------- */
 @media (min-width: 900px) {
   .fmp-desktop-only { display: initial; }
   .fmp-mobile-only  { display: none; }
+  .fmp-header-nav   { display: flex; }
 
   /* desktop shell = header row + two-pane row */
   .fmp-two-pane {

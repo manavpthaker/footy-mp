@@ -31,6 +31,29 @@ export function flagFor(name?: string | null, fifa?: string | null): string {
   return "⚽";
 }
 
+/** Minimal team shape needed to resolve a crest image. */
+export interface CrestTeam {
+  name?: string | null;
+  crest_url?: string | null;
+  espn_id?: string | null;
+  is_national?: boolean | null;
+}
+
+/**
+ * Crest image URL for a team. Prefers the ingested `crest_url`; falls back to
+ * ESPN's stable logo CDN path derived from `espn_id` (covers every team we've
+ * ever ingested, since espn_id is our natural key). Returns null when we have
+ * neither — callers then fall back to `flagFor()` emoji.
+ */
+export function crestUrlFor(team?: CrestTeam | null): string | null {
+  if (!team) return null;
+  if (team.crest_url) return team.crest_url;
+  if (team.espn_id) {
+    return `https://a.espncdn.com/i/teamlogos/soccer/500/${team.espn_id}.png`;
+  }
+  return null;
+}
+
 const SHORT_BY_TEAM: Record<string, string> = {
   "Colombia": "COL", "Switzerland": "SUI", "France": "FRA", "Spain": "ESP",
   "Argentina": "ARG", "England": "ENG", "Portugal": "POR", "Ghana": "GHA",

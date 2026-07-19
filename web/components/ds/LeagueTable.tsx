@@ -1,6 +1,7 @@
 // @ts-nocheck  — DS prototype JSX ported as-is; typed via the design-system .d.ts files.
 "use client";
 import React from 'react';
+import { Crest } from './Crest';
 
 const zoneColor = (zone) =>
   zone === 'ucl' ? 'var(--zone-ucl)'
@@ -58,7 +59,9 @@ export function LeagueTable({ rows, onSelect = undefined, showForm = true, style
               >
                 <td style={{ ...td, fontFamily: 'var(--font-ui)', textAlign: 'left', paddingLeft: '9px', fontWeight: 'var(--fw-semibold)', whiteSpace: 'nowrap' }}>
                   <span style={{ display: 'inline-block', width: '19px', color: 'var(--text-faint)', fontSize: 'var(--fs-2xs)', fontFamily: 'var(--font-mono)' }}>{r.pos ! ? r.pos : i + 1}</span>
-                  <span style={{ display: 'inline-block', width: '20px', textAlign: 'center', marginRight: '6px', fontSize: '14px' }}>{r.flag || '⚽'}</span>
+                  <span style={{ display: 'inline-block', width: '20px', textAlign: 'center', marginRight: '6px', fontSize: '14px', verticalAlign: 'middle' }}>
+                    {r.crest ? <Crest team={r.crest} size={16} /> : (r.flag || '⚽')}
+                  </span>
                   {r.team}
                   {r.followed && <span style={{ marginLeft: '5px', color: 'var(--follow)', fontSize: 'var(--fs-xs)' }}>★</span>}
                 </td>

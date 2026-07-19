@@ -10,6 +10,8 @@ import type { LeagueTableRow } from "@/lib/data";
 interface Bundle {
   leagueId: number;
   leagueName: string;
+  season: string | null;
+  complete: boolean;
   rows: (LeagueTableRow & { flag: string })[];
 }
 
@@ -39,6 +41,18 @@ export function TablesClient({ payload }: { payload: Bundle[] }) {
             fontWeight: 700, fontSize: "var(--fs-h2)",
             textTransform: "uppercase", letterSpacing: "0.04em",
           }}>{b.leagueName}</span>
+          {b.season && (
+            <span style={{ ...eyebrow, color: "var(--text-faint)" }}>
+              {b.season}
+              {b.complete && (
+                <span style={{
+                  marginLeft: 6, padding: "1px 6px", borderRadius: 4,
+                  border: "1px solid var(--border)", background: "var(--surface-tint)",
+                  color: "var(--gold)",
+                }}>FINAL</span>
+              )}
+            </span>
+          )}
           <div style={{ flex: 1 }} />
           <Link href={`/leagues/${b.leagueId}`} style={{
             color: "var(--accent-2)", fontSize: "var(--fs-xs)",

@@ -42,8 +42,10 @@ export function AppHeader() {
             letterSpacing: "0.06em", textTransform: "uppercase",
           }}>MPFC</div>
         </Link>
-        <nav className="fmp-desktop-only" style={{
-          display: "flex", alignSelf: "stretch", marginLeft: 14,
+        {/* display lives in .fmp-header-nav (none on mobile, flex ≥900px) —
+            an inline `display` here would defeat the media query */}
+        <nav className="fmp-header-nav" style={{
+          alignSelf: "stretch", marginLeft: 14,
         }}>
           {TABS.map(t => {
             const on = t.id === activeId;
@@ -87,6 +89,7 @@ export function AppHeader() {
  */
 function detailToTab(pathname: string): string {
   if (pathname.startsWith("/matches")) return "matches";
+  if (pathname.startsWith("/news")) return "news";
   if (pathname.startsWith("/leagues") || pathname.startsWith("/tables")) return "tables";
   if (pathname.startsWith("/map")) return "map";
   if (pathname.startsWith("/teams") || pathname.startsWith("/players")) return "today";

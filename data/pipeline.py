@@ -92,10 +92,12 @@ def ingest_espn(days_back: int = 3, days_fwd: int = 7,
                 home_id = db.get_or_create_team(
                     name=home, league_id=league_ids[name],
                     espn_id=str(r.get("home_espn_id") or ""), league_format=fmt,
+                    crest_url=r.get("home_logo"),
                 )
                 away_id = db.get_or_create_team(
                     name=away, league_id=league_ids[name],
                     espn_id=str(r.get("away_espn_id") or ""), league_format=fmt,
+                    crest_url=r.get("away_logo"),
                 )
                 winner = None
                 w_name = canonical_team(r.get("winner"))
@@ -397,7 +399,7 @@ def ingest_rosters(limit: int | None = None) -> int:
             name=canonical_team(core["name"]) or core["name"],
             league_id=slug_to_league.get(league_slug or ""),
             espn_id=core["espn_id"], short_name=core.get("short_name"),
-            league_format="league",
+            league_format="league", crest_url=core.get("crest_url"),
         )
         club_cache[club_espn_id] = tid
         return tid

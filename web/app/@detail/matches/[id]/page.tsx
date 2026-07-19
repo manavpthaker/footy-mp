@@ -1,6 +1,8 @@
 import React from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ScreenHeader } from "@/components/mobile/ScreenHeader";
+import { Crest } from "@/components/ds/Crest";
 import { Pad, eyebrow, mono } from "@/components/mobile/primitives";
 // @ts-ignore
 import { SectionHeading } from "@/components/ds";
@@ -70,7 +72,7 @@ export default async function MatchDetail({ params }: { params: { id: string } }
           borderRadius: "var(--radius-2xl)", padding: "16px 12px",
           boxShadow: isLive ? "inset 3px 0 0 var(--status-live)" : "none",
         }}>
-          <TeamCell name={home?.name ?? "TBD"} />
+          <TeamCell team={home} id={m.home_team_id} />
           <div style={{ textAlign: "center" }}>
             <div style={{
               ...mono, fontSize: 32, fontWeight: 700, lineHeight: 1,
@@ -91,7 +93,7 @@ export default async function MatchDetail({ params }: { params: { id: string } }
                   }) + " · " + kick.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
             </div>
           </div>
-          <TeamCell name={away?.name ?? "TBD"} />
+          <TeamCell team={away} id={m.away_team_id} />
         </div>
 
         {pred && pH != null && pD != null && pA != null && (
@@ -210,8 +212,10 @@ export default async function MatchDetail({ params }: { params: { id: string } }
           <>
             <SectionHeading tick="var(--gold)">Form · last 5</SectionHeading>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <FormPanel label={`${flagFor(home.name)} ${shortNameFor(home.name)}`} results={homeForm} />
-              <FormPanel label={`${flagFor(away.name)} ${shortNameFor(away.name)}`} results={awayForm} />
+              <FormPanel label={`${flagFor(home.name)} ${shortNameFor(home.name)}`} results={homeForm}
+                href={`/teams/${m.home_team_id}`} />
+              <FormPanel label={`${flagFor(away.name)} ${shortNameFor(away.name)}`} results={awayForm}
+                href={`/teams/${m.away_team_id}`} />
             </div>
           </>
         )}
@@ -236,30 +240,42 @@ export default async function MatchDetail({ params }: { params: { id: string } }
   );
 }
 
-function TeamCell({ name }: { name: string }) {
-  return (
+/** Team block on the scoreboard — links through to the team page so a match
+ *  is always one tap away from either side. Placeholder teams ("SF1 Winner")
+ *  stay unlinked. */
+function TeamCell({ team, id }: { team: any; id: number | null }) {
+  const name: string = team?.name ?? "TBD";
+  const linkable = id != null && team && !isPlaceholderTeam(name);
+  const body = (
     <div style={{ textAlign: "center", minWidth: 0 }}>
-      <div style={{ fontSize: 30 }}>{flagFor(name)}</div>
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <Crest team={team} name={name} size={34} />
+      </div>
       <div style={{
         fontWeight: 700, fontSize: "var(--fs-sm)",
         textTransform: "uppercase", letterSpacing: "0.03em", marginTop: 4,
-      }}>{name}</div>
+      }}>
+        {name}
+        {linkable && <span style={{ color: "var(--text-faint)", marginLeft: 4 }}>›</span>}
+      </div>
     </div>
   );
+  return linkable ? <Link href={`/teams/${id}`}>{body}</Link> : body;
 }
 
-function FormPanel({ label, results }: { label: string; results: string[] }) {
-  return (
+function FormPanel({ label, results, href }: { label: string; results: string[]; href?: string }) {
+  const body = (
     <div style={{
       background: "var(--surface-panel)", border: "1px solid var(--border)",
       borderRadius: "var(--radius-xl)", padding: "10px 12px",
     }}>
-      <div style={{ ...eyebrow, marginBottom: 7 }}>{label}</div>
+      <div style={{ ...eyebrow, marginBottom: 7 }}>{label}{href ? " ›" : ""}</div>
       {results.length
         ? <FormPills results={results} size={20} />
         : <div style={{ color: "var(--text-faint)", fontSize: "var(--fs-sm)" }}>—</div>}
     </div>
   );
+  return href ? <Link href={href}>{body}</Link> : body;
 }
 
 function FactorPanel({ label, factors }: { label: string; factors: { label: string; z: number }[] }) {

@@ -67,6 +67,66 @@ def _season_start_iso() -> str:
     return f"{y}-08-01T00:00:00Z"
 
 
+# ESPN phase slugs → what the occasion actually is. The writer must know the
+# difference between "a knockout tie" and "the final" — the stakes copy hangs
+# on it.
+_STAGE_LABELS = {
+    "final": "Final",
+    "finals": "Final",
+    "3rd-place-playoff": "Third-place play-off",
+    "third-place-playoff": "Third-place play-off",
+    "semifinals": "Semi-final",
+    "semifinal": "Semi-final",
+    "quarterfinals": "Quarter-final",
+    "quarterfinal": "Quarter-final",
+    "round-of-16": "Round of 16",
+    "round-of-32": "Round of 32",
+    "playoff-round": "Play-off round",
+    "knockout-round-playoffs": "Knockout play-off round",
+    "group-stage": "Group stage",
+    "league-stage": "League phase",
+    "regular-season": "Regular season",
+}
+
+
+def stage_context(match: dict, league: dict) -> dict:
+    """Turn matches.phase / is_knockout into explicit occasion context for the
+    writers. A World Cup final must never read like a generic knockout tie."""
+    phase = (match.get("phase") or "").strip().lower()
+    label = _STAGE_LABELS.get(phase) or (
+        phase.replace("-", " ").title() if phase else None)
+    comp = league.get("name") or "this competition"
+    is_final = phase in ("final", "finals")
+    note = None
+    if is_final:
+        note = (f"THIS IS THE {comp.upper()} FINAL — the trophy match, winner "
+                f"takes it all, no second chances and no next round. Frame the "
+                f"entire piece around the occasion.")
+    elif phase in ("semifinals", "semifinal"):
+        note = f"Semi-final: the winner goes to the {comp} final."
+    elif phase in ("3rd-place-playoff", "third-place-playoff"):
+        note = "Third-place play-off: the consolation match, bronze on the line."
+    elif match.get("is_knockout"):
+        note = "Knockout round: lose and go home."
+    return {
+        "stage": label,
+        "is_knockout": bool(match.get("is_knockout")),
+        "is_final": is_final,
+        "season": match.get("season"),
+        "occasion_note": note,
+    }
+
+
+def _fixture_header(dossier: dict) -> str:
+    """`Match:` line for the prompts — includes the stage so the writer can't
+    miss the occasion."""
+    fx = dossier["fixture"]
+    comp = fx.get("competition") or ""
+    stage = fx.get("stage")
+    comp_bit = f"{comp} — {stage.upper()}" if stage else comp
+    return f"Match: {fx['home']} vs {fx['away']} ({comp_bit})"
+
+
 def _team_season_xg(team_id: int, matches_by_id: dict, stats: list[dict]) -> dict:
     """Season xG for/against per match for a team, plus last-5 trend."""
     rows = []
@@ -192,6 +252,7 @@ def build_dossier(match: dict, teams: dict, leagues: dict,
             "competition": league.get("name"),
             "is_international": bool(league.get("is_international")),
             "status": match.get("status"),
+            **stage_context(match, league),
         },
         "model": {
             "version": MODEL_VERSION,
@@ -283,7 +344,11 @@ You are given the match dossier (the source of truth for every number) and
 notes from four analysts. Write the lowdown:
 
 - 3 or 4 paragraphs, each 2-4 sentences.
-- Paragraph 1: the setup — what this match is, both teams' form/state.
+- Paragraph 1: the setup — what this match is, both teams' form/state. Take
+  the occasion from fixture.stage / fixture.occasion_note and write to it: a
+  FINAL is the trophy match and the whole piece should carry that weight; a
+  semi-final is a shot at the final; a group game is a group game. Never call
+  a final "a knockout tie".
 - Paragraph 2: the matchup — tactics, key players, where it's won and lost.
 - Paragraph 3: the verdict paragraph — lead with the call, back it with the
   model's numbers (win probabilities, expected goals), state the predicted
@@ -291,7 +356,9 @@ notes from four analysts. Write the lowdown:
   win-probability gap means call it flat out; 14-24 means "should handle
   this"; under 8 means say it's a genuine coin flip.
 - Optional paragraph 4: stakes — knockout math (extra time/pens probability,
-  shootout nerve), or what the result means. Include when relevant.
+  shootout nerve), or what the result means. Include when relevant. In a
+  final, this paragraph is not optional: this is the last match — what's on
+  the line is the trophy itself.
 - Also produce "verdict": ONE punchy sentence with the call and most likely
   scoreline (derive a plausible scoreline from the expected goals; round
   sensibly). This appears in bold above the paragraphs.
@@ -308,7 +375,9 @@ The match is LIVE. You are given the dossier including the current score and
 minute, plus the model's pre-match read. Write the in-game lowdown:
 
 - 1 or 2 paragraphs, 2-3 sentences each. Urgent, present tense.
-- Open with the state of the game: score, minute, who's on top.
+- Open with the state of the game: score, minute, who's on top. Carry the
+  occasion (fixture.stage / occasion_note) — a final that's level late is a
+  different sentence than a group game that's level late.
 - Measure it against the pre-match read — is the favorite delivering, is the
   underdog pulling something, what does the trailing side need and how long
   have they got.
@@ -325,7 +394,9 @@ model's pre-match prediction. Write the post-match lowdown:
 
 - 2 or 3 paragraphs, 2-4 sentences each.
 - Paragraph 1: the result, plainly and with flavor — score, extra time or
-  penalties if they happened, what kind of result it reads as.
+  penalties if they happened, what kind of result it reads as. If
+  fixture.is_final is true, this was the trophy match: the winner are
+  champions — say so.
 - Paragraph 2: the model's reckoning — what the pre-match numbers said and
   whether the read landed or ate crow. Be honest either way; if the model
   priced the winner under 30%, say it got beat. If the favorite landed,
@@ -377,11 +448,14 @@ def generate_lowdown(dossier: dict, state: str = "pre") -> dict | None:
     d = json.dumps(dossier, indent=1)
     home = dossier["fixture"]["home"]
     away = dossier["fixture"]["away"]
+    header = _fixture_header(dossier)
+    occasion = dossier["fixture"].get("occasion_note")
+    occasion_line = f"\nOCCASION: {occasion}\n" if occasion else ""
 
     if state in ("live", "post"):
         system = LIVE_SYSTEM if state == "live" else POST_SYSTEM
         prompt = (
-            f"Match: {home} vs {away} ({dossier['fixture'].get('competition')})\n\n"
+            f"{header}\n{occasion_line}\n"
             f"DOSSIER (source of truth):\n{d}\n\n"
             f"Write the {'in-game' if state == 'live' else 'post-match'} lowdown now."
         )
@@ -395,17 +469,18 @@ def generate_lowdown(dossier: dict, state: str = "pre") -> dict | None:
         "players":   f"Analyze the player matchup for {home} vs {away}: key players, "
                      f"hot/cold streaks (last-3 goal involvements vs season rate), and "
                      f"who decides this game.\n\nDossier:\n{d}",
-        "momentum":  f"Analyze momentum and stakes for {home} vs {away}: form trends "
-                     f"(last-5 xG vs season xG), head-to-head, knockout context "
-                     f"(extra-time/pens probabilities, temper ratings) if present."
-                     f"\n\nDossier:\n{d}",
+        "momentum":  f"Analyze momentum and stakes for {home} vs {away}: the occasion "
+                     f"(fixture.stage / fixture.occasion_note — a final or semi-final "
+                     f"changes everything), form trends (last-5 xG vs season xG), "
+                     f"head-to-head, knockout context (extra-time/pens probabilities, "
+                     f"temper ratings) if present.\n\nDossier:\n{d}",
     }
     notes = {}
     for key, prompt in analysts.items():
         notes[key] = _ask(client, ANALYST_SYSTEM, prompt)
 
     synth_prompt = (
-        f"Match: {home} vs {away} ({dossier['fixture'].get('competition')})\n\n"
+        f"{header}\n{occasion_line}\n"
         f"DOSSIER (source of truth):\n{d}\n\n"
         f"ANALYST NOTES:\n"
         f"[{home}]\n{notes['home_team']}\n\n"
@@ -447,7 +522,8 @@ def _load_context():
     all_matches = db.page_all(
         "matches",
         "id,league_id,home_team_id,away_team_id,kickoff_utc,status,"
-        "home_goals,away_goals,went_pens,pens_home,pens_away")
+        "home_goals,away_goals,went_pens,pens_home,pens_away,"
+        "phase,is_knockout,season")
     all_stats = db.page_all("team_match_stats", "match_id,team_id,xg,xga")
 
     ratings = {}

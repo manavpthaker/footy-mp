@@ -3,6 +3,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 // @ts-ignore  — DS JSX with permissive prop types
 import { MatchRow } from "@/components/ds";
+import { Crest } from "@/components/ds/Crest";
 import { MiniProb, mono } from "./primitives";
 import { isPlaceholderTeam } from "@/lib/format";
 import type { RichMatch } from "@/lib/data";
@@ -49,13 +50,15 @@ export function FixtureItem({
   const homeTeam = m.home_team?.name ?? "TBD";
   const awayTeam = m.away_team?.name ?? "TBD";
   const homeEl = (
-    <span>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <Crest team={m.home_team} name={homeTeam} size={16} />
       {homeTeam}
       {followedH && <span style={{ color: "var(--follow)", marginLeft: 4, fontSize: "var(--fs-xs)" }}>★</span>}
     </span>
   );
   const awayEl = (
-    <span>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <Crest team={m.away_team} name={awayTeam} size={16} />
       {awayTeam}
       {followedA && <span style={{ color: "var(--follow)", marginLeft: 4, fontSize: "var(--fs-xs)" }}>★</span>}
     </span>

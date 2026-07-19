@@ -9,6 +9,9 @@ import { SectionHeading } from "@/components/ds";
 import { StatCard } from "@/components/ds";
 import { FollowToggle } from "@/components/mobile/FollowToggle";
 import { getPlayer, getTeam, getCountry, listFollows, playerStatBlocks, PlayerAgg } from "@/lib/data";
+import { newsForPlayer } from "@/lib/news";
+import { NewsList } from "@/components/ds/NewsList";
+import { Crest } from "@/components/ds/Crest";
 import { flagFor, competitionCode } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +34,7 @@ export default async function PlayerDetail({ params }: { params: { id: string } 
     playerStatBlocks(id),
   ]);
   const followed = follows.some(f => f.entity_type === "player" && f.entity_id === id);
+  const news = await newsForPlayer(player.name, team?.name ?? country?.name);
   const { season, worldCup, log } = blocks;
 
   return (
@@ -47,9 +51,17 @@ export default async function PlayerDetail({ params }: { params: { id: string } 
             background: "var(--surface-panel)", border: "1px solid var(--border)",
             borderRadius: "var(--radius-xl)", padding: "11px 13px",
           }}>
+            {player.photo_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={player.photo_url} alt="" width={40} height={40}
+                style={{ borderRadius: "50%", objectFit: "cover", background: "var(--surface-tint)" }} />
+            )}
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={eyebrow}>club</div>
-              <div style={{ fontWeight: 700, fontSize: "var(--fs-h2)", marginTop: 2 }}>{team.name}</div>
+              <div style={{
+                fontWeight: 700, fontSize: "var(--fs-h2)", marginTop: 2,
+                display: "flex", alignItems: "center", gap: 7,
+              }}><Crest team={team} size={18} /> {team.name}</div>
             </div>
             <span style={{ color: "var(--accent-2)", fontSize: 16 }}>›</span>
           </Link>
@@ -99,6 +111,13 @@ export default async function PlayerDetail({ params }: { params: { id: string } 
                 </Link>
               ))}
             </div>
+          </>
+        )}
+
+        {news.length > 0 && (
+          <>
+            <SectionHeading tick="var(--accent)">In the news</SectionHeading>
+            <NewsList items={news} />
           </>
         )}
 

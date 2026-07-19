@@ -176,7 +176,8 @@ def get_or_create_team(name: str, league_id: int | None = None,
                        country_id: int | None = None, espn_id: str | None = None,
                        fbref_id: str | None = None, is_national: bool = False,
                        short_name: str | None = None,
-                       league_format: str | None = None) -> int:
+                       league_format: str | None = None,
+                       crest_url: str | None = None) -> int:
     """One row per real-world team, forever.
 
     Identity: espn_id first (global natural key), then name (global — a club that
@@ -188,9 +189,9 @@ def get_or_create_team(name: str, league_id: int | None = None,
     hits = []
     if espn_id:
         hits = _rows(client().table("teams")
-                     .select("id,espn_id,fbref_id,league_id,is_national").eq("espn_id", espn_id).execute())
+                     .select("id,espn_id,fbref_id,league_id,is_national,crest_url").eq("espn_id", espn_id).execute())
     if not hits:
-        q = client().table("teams").select("id,espn_id,fbref_id,league_id,is_national").eq("name", name)
+        q = client().table("teams").select("id,espn_id,fbref_id,league_id,is_national,crest_url").eq("name", name)
         hits = _rows(q.execute())
         # never adopt a different club that happens to share the name: if the hit
         # has a conflicting espn_id, treat as a distinct team
@@ -204,6 +205,7 @@ def get_or_create_team(name: str, league_id: int | None = None,
         patch = {}
         if espn_id and not t.get("espn_id"): patch["espn_id"] = espn_id
         if fbref_id and not t.get("fbref_id"): patch["fbref_id"] = fbref_id
+        if crest_url and not t.get("crest_url"): patch["crest_url"] = crest_url
         if country_id: patch["country_id"] = country_id
         if national and not t.get("is_national"): patch["is_national"] = True
         # domestic home changes only on league->league moves (promotion/relegation)
@@ -226,7 +228,7 @@ def get_or_create_team(name: str, league_id: int | None = None,
         "league_id": league_id if (league_format in (None, "league") and not national) else None,
         "country_id": country_id,
         "espn_id": espn_id, "fbref_id": fbref_id, "is_national": national,
-        "short_name": short_name,
+        "short_name": short_name, "crest_url": crest_url,
     }
     r = _rows(client().table("teams").insert(row).execute())
     return r[0]["id"]

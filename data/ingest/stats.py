@@ -63,7 +63,30 @@ def understat_player_match(leagues=None, seasons=("2526",)):
     ids = [int(g) for g in sched["game_id"].dropna().unique().tolist()]
     if not ids:
         return []
-    df = us.read_player_match_stats(match_id=ids).reset_index()
+
+    # One malformed Understat payload (rare, mostly in older seasons) raises
+    # inside soccerdata and would sink the whole season. Fetch in chunks and
+    # fall back to per-match on a failing chunk, so a bad match costs exactly
+    # that match. soccerdata caches per match, so this adds no extra requests.
+    import pandas as pd
+    frames = []
+    skipped = 0
+    CHUNK = 50
+    for i in range(0, len(ids), CHUNK):
+        chunk = ids[i:i + CHUNK]
+        try:
+            frames.append(us.read_player_match_stats(match_id=chunk))
+        except Exception:
+            for mid in chunk:
+                try:
+                    frames.append(us.read_player_match_stats(match_id=[mid]))
+                except Exception:
+                    skipped += 1
+    if skipped:
+        print(f"[understat] {skipped} matches had unreadable player data — skipped")
+    if not frames:
+        return []
+    df = pd.concat(frames).reset_index()
     rows = []
     for _, r in df.iterrows():
         rows.append({

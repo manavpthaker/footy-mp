@@ -298,7 +298,11 @@ def ingest_player_stats(seasons: list[str], leagues: list[str] | None = None) ->
         except Exception as e:
             print(f"[players] season {season} failed: {e}")
             continue
-        batch: list[dict] = []
+        # keyed by the upsert's conflict target: two Understat rows can resolve
+        # to the same (match, player) — e.g. adjacent fixtures collapsing onto
+        # one DB match via the ±1-day date tolerance — and Postgres rejects a
+        # single upsert that touches the same row twice (21000). Last write wins.
+        by_key: dict[tuple[int, int], dict] = {}
         for r in recs:
             league_name = _understat_league_to_ours(r.get("league"))
             if not league_name or league_name not in league_ids or not r.get("date"):
@@ -324,7 +328,7 @@ def ingest_player_stats(seasons: list[str], leagues: list[str] | None = None) ->
                 us_id = str(r.get("understat_id") or "") or None
                 player_cache[pkey] = db.get_or_create_player(
                     pname, team_id=team_id, position=pos, understat_id=us_id)
-            batch.append({
+            by_key[(match_id, player_cache[pkey])] = {
                 "match_id": match_id, "player_id": player_cache[pkey], "team_id": team_id,
                 "minutes": _to_int(r.get("minutes")), "goals": _to_int(r.get("goals")),
                 "assists": _to_int(r.get("assists")), "xg": _to_num(r.get("xg")),
@@ -332,14 +336,11 @@ def ingest_player_stats(seasons: list[str], leagues: list[str] | None = None) ->
                 "shots": _to_int(r.get("shots")),
                 "key_passes": _to_int(r.get("key_passes")),
                 "yellow": _to_int(r.get("yellow")), "red": _to_int(r.get("red")),
-            })
-            if len(batch) >= 500:
-                db.upsert_player_match_stats(batch)
-                written += len(batch)
-                batch = []
-        if batch:
-            db.upsert_player_match_stats(batch)
-            written += len(batch)
+            }
+        rows = list(by_key.values())
+        for i in range(0, len(rows), 500):
+            db.upsert_player_match_stats(rows[i:i + 500])
+            written += len(rows[i:i + 500])
         print(f"[players] season {season}: {written} player-match rows so far")
     if unmatched:
         print(f"[players] unmatched team names (extend TEAM_ALIASES): {sorted(unmatched)}")

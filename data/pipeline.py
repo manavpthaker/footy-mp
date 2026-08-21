@@ -23,7 +23,7 @@ Modes (env var PIPELINE_MODE, or CLI arg):
     backtest  — walk-forward backtest vs the goals-only baseline; exits non-zero
                 if the xG model does not beat the baseline on RPS and log-loss.
     lowdown   — LLM-written match commentary ("The Lowdown") for upcoming
-                matches with predictions. Needs ANTHROPIC_API_KEY (skips
+                matches with predictions. Needs OPENAI_API_KEY (skips
                 gracefully without it). PIPELINE_LOWDOWN_LIMIT caps matches.
 
 Idempotent. Safe to re-run at any cadence.
@@ -499,7 +499,7 @@ def main() -> int:
                 return 0
             ingest_espn(days_back=1, days_fwd=1)
             # refresh in-game lowdowns (regenerates only when score/period moved;
-            # skips gracefully when ANTHROPIC_API_KEY isn't set)
+            # skips gracefully when OPENAI_API_KEY isn't set)
             from data import lowdown
             lowdown.run(states=("live",))
         elif mode == "backfill":

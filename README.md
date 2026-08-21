@@ -22,7 +22,7 @@ data/
   db/migrations/           run 002_backbone.sql once on an existing DB
   pipeline.py              orchestrator — modes: daily/live/backfill/players/seed/
                            model/backtest/lowdown/rosters/seasons
-  lowdown.py               "The Lowdown" — hybrid Sonnet/Opus match commentary
+  lowdown.py               "The Lowdown" — hybrid OpenAI match commentary
   ingest/espn.py           fixtures/results/live/shootouts/phases + NT rosters (no key)
   ingest/stats.py          xG + player-match stats via soccerdata (Understat)
   model/engine.py          xG Dixon-Coles + per-league HFA + ET/pens cascade + nerves
@@ -63,7 +63,7 @@ cd web && npm i && npm run dev        # app on :3000
 ```
 GitHub Actions runs `daily` (ingest → backtest gate → model → lowdown) at 06:00
 UTC, a guarded `live` refresh every 15 minutes, and `rosters` weekly on Mondays
-(secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, optional `ANTHROPIC_API_KEY`).
+(secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, optional `OPENAI_API_KEY`).
 
 ## What makes the model better than WC26
 WC26 built team strength from FIFA points + goals. footy-mp uses **real expected goals**

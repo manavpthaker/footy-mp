@@ -70,7 +70,7 @@ jobs:
         run: python -m data.pipeline model
       - name: Lowdown (match commentary)
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python -m data.pipeline lowdown   # skips gracefully when the key isn't set
 
   live:
@@ -89,7 +89,7 @@ jobs:
         run: pip install -r data/requirements.txt
       - name: Live refresh (guarded)
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python -m data.pipeline live
 
   rosters:
@@ -133,5 +133,5 @@ jobs:
         env:
           PIPELINE_BACKFILL_SEASONS: ${{ inputs.backfill_seasons }}
           PIPELINE_PLAYER_SEASONS: ${{ inputs.player_seasons }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python -m data.pipeline ${{ inputs.mode }}

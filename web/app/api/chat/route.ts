@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-import { betaTool } from "@anthropic-ai/sdk/helpers/beta/json-schema";
+import OpenAI from "openai";
 import { sameOrigin } from "@/lib/admin";
 import { searchEntities } from "@/lib/search";
 import {
@@ -16,19 +15,44 @@ export const maxDuration = 60; // tool loops need more than the default 10s
 
 /**
  * Ask MPFC — a chat assistant grounded in the app's own database.
- * Claude answers via tool calls against Supabase (standings, fixtures,
+ * The model answers via tool calls against Supabase (standings, fixtures,
  * model predictions, lowdowns, news) rather than from memory, so answers
  * reflect what the app actually knows today.
  *
- * Requires ANTHROPIC_API_KEY in the deployment env (same key the pipeline
+ * Requires OPENAI_API_KEY in the deployment env (same key the pipeline
  * uses for The Lowdown). Without it the endpoint degrades to a clear message.
  */
 
-const MODEL = "claude-opus-4-8";
+const MODEL = process.env.OPENAI_CHAT_MODEL ?? "gpt-5-mini";
 const MAX_TURNS = 16;             // history cap sent to the model
-const MAX_ITERATIONS = 8;         // tool-loop cap per question
+const MAX_TOOL_ROUNDS = 8;        // tool-loop cap per question
 
 const j = (x: unknown) => JSON.stringify(x);
+
+interface FunctionToolConfig {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  run: (input: Record<string, unknown>) => Promise<string>;
+}
+
+interface AppTool {
+  definition: OpenAI.Responses.FunctionTool;
+  run: FunctionToolConfig["run"];
+}
+
+function functionTool({ name, description, inputSchema, run }: FunctionToolConfig): AppTool {
+  return {
+    definition: {
+      type: "function",
+      name,
+      description,
+      parameters: inputSchema,
+      strict: true,
+    },
+    run,
+  };
+}
 
 function compactMatch(m: any) {
   return {
@@ -49,7 +73,7 @@ function compactMatch(m: any) {
 
 function buildTools() {
   return [
-    betaTool({
+    functionTool({
       name: "search_entities",
       description:
         "Search the app's database for teams, players, leagues, and countries by name. "
@@ -73,7 +97,7 @@ function buildTools() {
         });
       },
     }),
-    betaTool({
+    functionTool({
       name: "get_standings",
       description:
         "Current league table for a league id (from search_entities). Returns season label, "
@@ -95,16 +119,18 @@ function buildTools() {
         });
       },
     }),
-    betaTool({
+    functionTool({
       name: "list_leagues",
       description: "List the domestic leagues that have standings available.",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false } as const,
+      inputSchema: {
+        type: "object", properties: {}, required: [], additionalProperties: false,
+      } as const,
       run: async () => {
         const ls = await tableableLeagues();
         return j(ls.map(l => ({ id: l.id, name: l.name })));
       },
     }),
-    betaTool({
+    functionTool({
       name: "get_team",
       description:
         "Everything about one team id: profile, model rating (attack/defense xG), last-5 form, "
@@ -144,7 +170,7 @@ function buildTools() {
         });
       },
     }),
-    betaTool({
+    functionTool({
       name: "get_player",
       description:
         "One player id: profile, current club, season and World Cup 2026 stat totals, recent match log.",
@@ -169,7 +195,7 @@ function buildTools() {
         });
       },
     }),
-    betaTool({
+    functionTool({
       name: "get_matches",
       description:
         "Matches by scope: 'live' (in play now), 'upcoming' (next scheduled), 'recent' (latest results). "
@@ -188,7 +214,7 @@ function buildTools() {
         return j(ms.map(compactMatch));
       },
     }),
-    betaTool({
+    functionTool({
       name: "get_match",
       description:
         "Full detail for one match id: score/state, model prediction (win probs, expected goals, "
@@ -219,14 +245,20 @@ function buildTools() {
         });
       },
     }),
-    betaTool({
+    functionTool({
       name: "get_news",
       description:
-        "Recent football news headlines. Pass a team/player/topic to focus, or omit for the general wire "
+        "Recent football news headlines. Pass a team/player/topic to focus, or null for the general wire "
         + "(transfers, manager moves, big storylines).",
       inputSchema: {
         type: "object",
-        properties: { topic: { type: "string", description: "Optional — e.g. a team or player name" } },
+        properties: {
+          topic: {
+            type: ["string", "null"],
+            description: "A team, player, or topic name; null for the general news wire",
+          },
+        },
+        required: ["topic"],
         additionalProperties: false,
       } as const,
       run: async (input: any) => {
@@ -235,10 +267,12 @@ function buildTools() {
         return j(items.map(n => ({ title: n.title, source: n.source, published: n.publishedAt })));
       },
     }),
-    betaTool({
+    functionTool({
       name: "get_transfers",
       description: "Latest player transfers and promotion/relegation moves the app has recorded.",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false } as const,
+      inputSchema: {
+        type: "object", properties: {}, required: [], additionalProperties: false,
+      } as const,
       run: async () => {
         const moves = await recentMovements(15);
         return j(moves.map(mv => ({
@@ -277,9 +311,9 @@ export async function POST(req: Request) {
   if (!sameOrigin(req)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({
-      reply: "Chat isn't configured yet — add ANTHROPIC_API_KEY to the deployment environment.",
+      reply: "Chat isn't configured yet — add OPENAI_API_KEY to the deployment environment.",
     });
   }
 
@@ -290,31 +324,87 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
   const history = Array.isArray(body?.messages) ? body.messages : [];
-  const messages = history
+  const messages: OpenAI.Responses.EasyInputMessage[] = history
     .filter((m: any) => (m?.role === "user" || m?.role === "assistant") && typeof m?.content === "string")
     .slice(-MAX_TURNS)
-    .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
+    .map((m: any) => ({
+      role: m.role as "user" | "assistant",
+      content: String(m.content).slice(0, 4000),
+    }));
   if (!messages.length || messages[messages.length - 1].role !== "user") {
     return NextResponse.json({ error: "no question" }, { status: 400 });
   }
 
-  const client = new Anthropic();
+  const client = new OpenAI();
   try {
-    const runner = client.beta.messages.toolRunner({
-      model: MODEL,
-      max_tokens: 4000,
-      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-      tools: buildTools(),
-      messages,
-      max_iterations: MAX_ITERATIONS,
-    });
-    const final = await runner.runUntilDone();
-    const reply = final.content
-      .filter((b: any) => b.type === "text")
-      .map((b: any) => b.text)
-      .join("\n")
-      .trim();
-    return NextResponse.json({ reply: reply || "I came up empty on that one — try rephrasing?" });
+    const appTools = buildTools();
+    const tools = appTools.map(tool => tool.definition);
+    const handlers = new Map(appTools.map(tool => [tool.definition.name, tool.run]));
+    const input: OpenAI.Responses.ResponseInput = [...messages];
+    let toolRounds = 0;
+
+    while (true) {
+      const response = await client.responses.create({
+        model: MODEL,
+        instructions: SYSTEM,
+        input,
+        tools,
+        max_output_tokens: 4000,
+        parallel_tool_calls: true,
+        reasoning: { effort: "low" },
+        include: ["reasoning.encrypted_content"],
+        prompt_cache_key: "footy-mp-chat-v1",
+        safety_identifier: "footy-mp-single-user",
+        store: false,
+      });
+
+      // Responses output items are valid replay input. The SDK's broad output
+      // union currently includes one status variant its input union omits.
+      input.push(...(response.output as OpenAI.Responses.ResponseInput));
+      const calls = response.output.filter(
+        (item): item is OpenAI.Responses.ResponseFunctionToolCall => item.type === "function_call",
+      );
+      if (!calls.length) {
+        const reply = response.output_text.trim();
+        return NextResponse.json({ reply: reply || "I came up empty on that one — try rephrasing?" });
+      }
+      if (toolRounds >= MAX_TOOL_ROUNDS) {
+        throw new Error(`tool loop exceeded ${MAX_TOOL_ROUNDS} rounds`);
+      }
+
+      const outputs = await Promise.all(calls.map(async call => {
+        const run = handlers.get(call.name);
+        if (!run) {
+          return {
+            type: "function_call_output" as const,
+            call_id: call.call_id,
+            output: j({ error: `unknown tool: ${call.name}` }),
+          };
+        }
+
+        try {
+          const parsed = JSON.parse(call.arguments);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("tool arguments must be an object");
+          }
+          return {
+            type: "function_call_output" as const,
+            call_id: call.call_id,
+            output: await run(parsed as Record<string, unknown>),
+          };
+        } catch (error: any) {
+          console.error(`[chat:${call.name}]`, error?.message ?? error);
+          return {
+            type: "function_call_output" as const,
+            call_id: call.call_id,
+            output: j({ error: `${call.name} failed` }),
+          };
+        }
+      }));
+
+      input.push(...outputs);
+      toolRounds += 1;
+    }
   } catch (e: any) {
     console.error("[chat]", e?.message ?? e);
     return NextResponse.json({

@@ -14,13 +14,13 @@ export function adminClient() {
 
 /**
  * Same-origin guard for mutating routes. Browsers always send Origin on
- * fetch POST/DELETE; a mismatch (or an absent host to compare) rejects.
+ * fetch POST/DELETE; a mismatch or missing comparison header rejects.
  * Single-user hardening, not auth — pair with Vercel Deployment Protection
  * to lock the whole app if it ever needs to be private.
  */
 export function sameOrigin(req: Request): boolean {
   const origin = req.headers.get("origin");
-  if (!origin) return true;                 // curl/no-CORS contexts: covered by RLS + obscurity
+  if (!origin) return false;
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   if (!host) return false;
   try {

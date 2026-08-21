@@ -85,8 +85,8 @@ change (promotion/relegation) the pipeline notices, surfaced as the
 - **The backtest gate never gated** — it existed only as a manual dispatch, so a
   regressed model could ship daily. → The 06:00 job now runs
   `backtest` *before* `model`; a failure blocks predictions. ✅
-- **The Lowdown ran ~60 Opus calls/day uncapped.** → Analyst passes moved to
-  Sonnet (Opus kept for the final synthesized voice), plus a hard per-run call
+- **The Lowdown ran ~60 flagship calls/day uncapped.** → Analyst passes use
+  GPT-5 nano (GPT-5 mini writes the final synthesized voice), plus a hard per-run call
   ceiling (`LOWDOWN_MAX_CALLS`, default 60 ≈ 12 matches). Roughly a 70% cost
   cut at equal output volume. ✅
 - CI: job timeouts added; the soccerdata cache key now rotates daily instead of

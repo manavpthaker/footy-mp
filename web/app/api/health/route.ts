@@ -16,6 +16,6 @@ export async function GET() {
     // writes (follow toggles via lib/admin.ts)
     supabase_admin_key: !!(process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_KEY),
     // Ask MPFC chat
-    anthropic_api_key: !!process.env.ANTHROPIC_API_KEY,
+    openai_api_key: !!process.env.OPENAI_API_KEY,
   });
 }

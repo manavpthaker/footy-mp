@@ -23,7 +23,7 @@ Flow per match:
   4. upsert into `lowdowns` keyed on (match_id, version); an inputs hash
                         skips regeneration when nothing changed.
 
-Requires ANTHROPIC_API_KEY. Runs via `python -m data.pipeline lowdown`
+Requires OPENAI_API_KEY. Runs via `python -m data.pipeline lowdown`
 (all states) or from the live cron (live matches only).
 """
 from __future__ import annotations
@@ -36,10 +36,10 @@ from datetime import datetime, timedelta, timezone
 from data import db
 
 LOWDOWN_VERSION = "lowdown-v1"
-# Hybrid model split: the four analyst passes are structured data-reads — Sonnet
-# handles them at ~1/5 the cost. Opus writes only the final synthesized voice.
-GEN_MODEL = os.environ.get("LOWDOWN_GEN_MODEL", "claude-opus-4-8")
-ANALYST_MODEL = os.environ.get("LOWDOWN_ANALYST_MODEL", "claude-sonnet-5")
+# Hobby-project split: the cheapest model handles repetitive data reads, while
+# mini keeps enough writing quality for the synthesized voice.
+GEN_MODEL = os.environ.get("LOWDOWN_GEN_MODEL", "gpt-5-mini")
+ANALYST_MODEL = os.environ.get("LOWDOWN_ANALYST_MODEL", "gpt-5-nano")
 # Hard ceiling on LLM calls per run (a pre-match lowdown = 5 calls). The runner
 # stops cleanly when the budget is spent and picks up next run.
 MAX_LLM_CALLS = int(os.environ.get("LOWDOWN_MAX_CALLS") or 60)
@@ -412,21 +412,22 @@ events, so never invent them."""
 
 
 def _client():
-    import anthropic
-    return anthropic.Anthropic()
+    from openai import OpenAI
+    return OpenAI()
 
 
 def _ask(client, system: str, user: str, max_tokens: int = 1200) -> str:
     _spend_call()
-    resp = client.messages.create(
+    resp = client.responses.create(
         model=ANALYST_MODEL,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user}],
+        max_output_tokens=max_tokens,
+        instructions=system,
+        input=user,
+        reasoning={"effort": "low"},
+        prompt_cache_key="footy-mp-lowdown-analyst-v1",
+        store=False,
     )
-    if resp.stop_reason == "refusal":
-        return ""
-    return next((b.text for b in resp.content if b.type == "text"), "")
+    return (resp.output_text or "").strip()
 
 
 LOWDOWN_SCHEMA = {
@@ -494,16 +495,24 @@ def generate_lowdown(dossier: dict, state: str = "pre") -> dict | None:
 
 def _synthesize(client, system: str, prompt: str, max_tokens: int) -> dict | None:
     _spend_call()
-    resp = client.messages.create(
+    resp = client.responses.create(
         model=GEN_MODEL,
-        max_tokens=max_tokens,
-        system=system,
-        output_config={"format": {"type": "json_schema", "schema": LOWDOWN_SCHEMA}},
-        messages=[{"role": "user", "content": prompt}],
+        max_output_tokens=max_tokens,
+        instructions=system,
+        input=prompt,
+        reasoning={"effort": "low"},
+        text={"format": {
+            "type": "json_schema",
+            "name": "lowdown",
+            "strict": True,
+            "schema": LOWDOWN_SCHEMA,
+        }},
+        prompt_cache_key="footy-mp-lowdown-synthesis-v1",
+        store=False,
     )
-    if resp.stop_reason == "refusal":
+    text = (resp.output_text or "").strip()
+    if not text:
         return None
-    text = next((b.text for b in resp.content if b.type == "text"), "")
     try:
         out = json.loads(text)
     except json.JSONDecodeError:
@@ -573,8 +582,8 @@ def run(days_ahead: int = 7, limit: int | None = None,
         states: tuple[str, ...] = ("pre", "live", "post")) -> dict:
     """Generate/refresh lowdowns. The daily job runs all states; the live cron
     calls run(states=("live",)) so in-game reads update as scores change."""
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("[lowdown] ANTHROPIC_API_KEY not set — skipping (not an error)")
+    if not os.environ.get("OPENAI_API_KEY"):
+        print("[lowdown] OPENAI_API_KEY not set — skipping (not an error)")
         return {"status": "skipped_no_key"}
 
     limit = limit or int(os.environ.get("PIPELINE_LOWDOWN_LIMIT") or 12)

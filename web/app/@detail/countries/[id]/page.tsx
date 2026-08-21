@@ -7,6 +7,7 @@ import { Pad, eyebrow, EmptyState } from "@/components/mobile/primitives";
 import { SectionHeading } from "@/components/ds";
 import { FixtureItem } from "@/components/mobile/FixtureItem";
 import { FollowToggle } from "@/components/mobile/FollowToggle";
+import { AskAbout } from "@/components/search/AskAbout";
 import {
   getCountry, listFollows, nationalTeamForCountry, leaguesForCountry,
   upcomingForTeams, recentResultsForTeams, squadByClub,
@@ -44,6 +45,15 @@ export default async function CountryDetail({ params }: { params: { id: string }
         right={<FollowToggle entityType="country" entityId={id} initialFollowed={followed} />}
       />
       <Pad style={{ paddingTop: 14 }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 9,
+          borderBottom: "1px solid var(--border)", paddingBottom: 12, marginBottom: 12,
+        }}>
+          <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.55, flex: "1 1 260px" }}>
+            National teams meet only during short windows. The club list below shows where this player pool develops between camps.
+          </div>
+          <AskAbout question={`Explain ${country.name}'s place in international football, their path to 2030, and which players or clubs connect to them.`} />
+        </div>
         {team && (
           <Link href={`/teams/${team.id}`} style={{
             display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit",

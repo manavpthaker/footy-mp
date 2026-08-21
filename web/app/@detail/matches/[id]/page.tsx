@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ScreenHeader } from "@/components/mobile/ScreenHeader";
 import { Crest } from "@/components/ds/Crest";
 import { Pad, eyebrow, mono } from "@/components/mobile/primitives";
+import { AskAbout } from "@/components/search/AskAbout";
 // @ts-ignore
 import { SectionHeading } from "@/components/ds";
 // @ts-ignore
@@ -54,6 +55,7 @@ export default async function MatchDetail({ params }: { params: { id: string } }
   const pA = pH != null && pD != null ? 100 - pH - pD : null;
   const verdict = verdictLine(m);
   const phase = phaseLabel(m.phase);
+  const context = matchContext(m);
   const knockoutOdds = pred && m.is_knockout && !isFinal
     && pred.p_advance_home != null;
 
@@ -96,10 +98,63 @@ export default async function MatchDetail({ params }: { params: { id: string } }
           <TeamCell team={away} id={m.away_team_id} />
         </div>
 
+        <section style={{
+          marginTop: 12, padding: "12px 13px", background: "var(--surface-tint)",
+          border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)",
+          borderRadius: "var(--radius-md)",
+        }}>
+          <div style={{ ...eyebrow, color: "var(--accent)" }}>{context.label}</div>
+          <div style={{ marginTop: 4, fontSize: "var(--fs-h2)", fontWeight: 700, lineHeight: 1.35 }}>
+            {context.title}
+          </div>
+          <p style={{ margin: "6px 0 10px", color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
+            {context.body}
+          </p>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            {m.league_id && (
+              <Link href={`/leagues/${m.league_id}`} style={{
+                color: "var(--accent-2)", fontSize: "var(--fs-xs)", fontWeight: 700,
+              }}>Understand {compName || "the competition"} →</Link>
+            )}
+            <AskAbout
+              question={`Why does ${home?.name ?? "the home team"} v ${away?.name ?? "the away team"} matter, and what should I know before reading the stats?`}
+            />
+          </div>
+        </section>
+
+        {lowdown && lowdown.paragraphs.length > 0 && (
+          <>
+            <SectionHeading tick={lowdown.state === "live" ? "var(--status-live)" : "var(--accent)"}>
+              {lowdown.state === "live" ? "The lowdown · live"
+                : lowdown.state === "post" ? "The lowdown · full time"
+                : "The lowdown"}
+            </SectionHeading>
+            <div style={{
+              background: "var(--surface-panel)", border: "1px solid var(--border)",
+              borderLeft: "3px solid var(--accent-2)",
+              borderRadius: "0 var(--radius-md) var(--radius-md) 0",
+              padding: "13px 16px",
+            }}>
+              {lowdown.verdict && (
+                <p style={{
+                  margin: "0 0 9px", fontSize: "var(--fs-sm)", lineHeight: 1.65,
+                  fontWeight: 700, color: "var(--text-primary)",
+                }}>{lowdown.verdict}</p>
+              )}
+              {lowdown.paragraphs.map((p, i) => (
+                <p key={i} style={{
+                  margin: i ? "9px 0 0" : 0, fontSize: "var(--fs-sm)",
+                  lineHeight: 1.65, color: "var(--text-muted)",
+                }}>{p}</p>
+              ))}
+            </div>
+          </>
+        )}
+
         {pred && pH != null && pD != null && pA != null && (
           <>
             <SectionHeading tick="var(--accent-2)">
-              {isFinal ? "What the model expected" : "Pre-match forecast"}
+              {isFinal ? "Model view · before kickoff" : "Model view"}
             </SectionHeading>
             <ProbabilityBar
               home={pH} draw={pD} away={pA}
@@ -158,49 +213,23 @@ export default async function MatchDetail({ params }: { params: { id: string } }
               }}>{verdict}</div>
             )}
 
-            {lowdown && lowdown.paragraphs.length > 0 && (
-              <>
-                <SectionHeading tick={lowdown.state === "live" ? "var(--status-live)" : "var(--accent)"}>
-                  {lowdown.state === "live" ? "The lowdown · live"
-                    : lowdown.state === "post" ? "The lowdown · full time"
-                    : "The lowdown"}
-                </SectionHeading>
-                <div style={{
-                  background: "var(--surface-panel)", border: "1px solid var(--border)",
-                  borderLeft: "3px solid var(--accent-2)",
-                  borderRadius: "0 var(--radius-xl) var(--radius-xl) 0",
-                  padding: "13px 16px",
-                }}>
-                  {lowdown.verdict && (
-                    <p style={{
-                      margin: "0 0 9px", fontSize: "var(--fs-sm)", lineHeight: 1.65,
-                      fontWeight: 700, color: "var(--text-primary)",
-                    }}>📋 {lowdown.verdict}</p>
-                  )}
-                  {lowdown.paragraphs.map((p, i) => (
-                    <p key={i} style={{
-                      margin: i ? "9px 0 0" : 0, fontSize: "var(--fs-sm)",
-                      lineHeight: 1.65, color: "var(--text-muted)",
-                    }}>{p}</p>
-                  ))}
-                </div>
-              </>
-            )}
-
             {pred.home_xg != null && pred.away_xg != null && (
-              <>
-                <SectionHeading>Scoreline odds</SectionHeading>
-                <div style={{
-                  background: "var(--surface-panel)", border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-xl)", padding: 12,
-                }}>
+              <details style={{
+                marginTop: 16, background: "var(--surface-panel)",
+                border: "1px solid var(--border)", borderRadius: "var(--radius-md)",
+              }}>
+                <summary style={{
+                  cursor: "pointer", padding: "10px 12px", fontSize: "var(--fs-sm)",
+                  fontWeight: 700, color: "var(--text-muted)",
+                }}>Dig into exact scoreline probabilities</summary>
+                <div style={{ padding: "2px 12px 12px" }}>
                   <ScorelineGrid
                     home={home ? shortNameFor(home.name) : "H"}
                     away={away ? shortNameFor(away.name) : "A"}
                     matrix={poissonMatrix(Number(pred.home_xg), Number(pred.away_xg), 5)}
                   />
                 </div>
-              </>
+              </details>
             )}
           </>
         )}
@@ -303,4 +332,58 @@ function verdictLine(m: any): string | null {
   if (fav === winner) return `Model favorite landed — priced ${favP}% pre-kick.`;
   const winP = Math.round((winner === "home" ? h : winner === "away" ? a : d) * 100);
   return `Upset by the model's book — the winner carried just ${winP}% pre-kick.`;
+}
+
+function matchContext(m: any): { label: string; title: string; body: string } {
+  const competition = m.league?.name ?? "This competition";
+  const phase = phaseLabel(m.phase);
+  if (m.status === "live") {
+    return {
+      label: "What is happening",
+      title: `${competition} is live${phase ? ` in the ${phase.toLowerCase()}` : ""}.`,
+      body: "The score is the immediate story. The competition format and match state tell you what that score can change.",
+    };
+  }
+  if (m.status === "final") {
+    return {
+      label: "What happened",
+      title: `${m.home_team?.name ?? "The home team"} ${m.home_goals ?? 0}–${m.away_goals ?? 0} ${m.away_team?.name ?? "the away team"}.`,
+      body: m.is_knockout
+        ? "This was a knockout match, so progression matters more than the ninety-minute score alone."
+        : "This result now feeds the competition table, each team's form and the next model update.",
+    };
+  }
+  if (m.is_knockout) {
+    return {
+      label: "What is at stake",
+      title: `${phase ?? "Knockout football"}: one side moves closer to the trophy.`,
+      body: "If the match is level after ninety minutes, this round can continue through extra time and penalties. Advance odds matter more than win-in-90 odds.",
+    };
+  }
+  switch (m.league?.format) {
+    case "qualifiers":
+      return {
+        label: "What is at stake",
+        title: `${competition} is part of the road to the next World Cup.`,
+        body: "Qualification is built across several international windows, so this match is one step in a longer campaign rather than a standalone event.",
+      };
+    case "cup":
+      return {
+        label: "What is at stake",
+        title: `${competition} connects clubs from different domestic leagues.`,
+        body: "Check the phase before reading the score: league-phase points, two-leg aggregate scores and one-match knockouts create different incentives.",
+      };
+    case "league":
+      return {
+        label: "What is at stake",
+        title: `Three points are available in the ${competition}.`,
+        body: "A win is worth three points and a draw one. The meaning of this match comes from the title race, qualification places and relegation fight around it.",
+      };
+    default:
+      return {
+        label: "Match context",
+        title: `${competition}${phase ? ` · ${phase}` : ""}`,
+        body: "Start with the competition and phase, then use form and the model to understand how the teams arrived here.",
+      };
+  }
 }

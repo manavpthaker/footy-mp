@@ -8,6 +8,7 @@ import { SectionHeading } from "@/components/ds";
 // @ts-ignore
 import { StatCard } from "@/components/ds";
 import { FollowToggle } from "@/components/mobile/FollowToggle";
+import { AskAbout } from "@/components/search/AskAbout";
 import { getPlayer, getTeam, getCountry, listFollows, playerStatBlocks, PlayerAgg } from "@/lib/data";
 import { newsForPlayer } from "@/lib/news";
 import { NewsList } from "@/components/ds/NewsList";
@@ -45,6 +46,15 @@ export default async function PlayerDetail({ params }: { params: { id: string } 
         right={<FollowToggle entityType="player" entityId={id} initialFollowed={followed} />}
       />
       <Pad style={{ paddingTop: 14 }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 9,
+          borderBottom: "1px solid var(--border)", paddingBottom: 12, marginBottom: 12,
+        }}>
+          <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.55, flex: "1 1 260px" }}>
+            Follow the player across club matches, transfers and national-team windows; those are different layers of the same career.
+          </div>
+          <AskAbout question={`Who is ${player.name}, what role do they play, and why should I follow them?`} />
+        </div>
         {team && (
           <Link href={`/teams/${team.id}`} style={{
             display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit",

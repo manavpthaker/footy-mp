@@ -82,6 +82,7 @@ export interface Match {
   season?: string | null;         // '2026-27' (club) / '2026' (intl)
   phase?: string | null;          // group-stage, semifinals, final, …
   is_knockout?: boolean | null;   // goes to ET/pens if level
+  updated_at?: string | null;
 }
 export interface Movement {
   id: number;

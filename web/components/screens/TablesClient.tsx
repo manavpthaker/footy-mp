@@ -6,6 +6,8 @@ import { Pad, ChipRail, Chip, EmptyState, eyebrow } from "@/components/mobile/pr
 // @ts-ignore
 import { LeagueTable } from "@/components/ds";
 import type { LeagueTableRow } from "@/lib/data";
+import { StandingsContext } from "@/components/competition/StandingsContext";
+import { AskAbout } from "@/components/search/AskAbout";
 
 interface Bundle {
   leagueId: number;
@@ -28,6 +30,17 @@ export function TablesClient({ payload }: { payload: Bundle[] }) {
 
   return (
     <div>
+      <Pad style={{ paddingTop: 14, paddingBottom: 10 }}>
+        <div style={{ ...eyebrow, color: "var(--accent)" }}>Competitions · domestic leagues</div>
+        <h1 style={{ margin: "5px 0 6px", fontSize: 23, lineHeight: 1.2, letterSpacing: 0 }}>
+          Read the race, not just the rows.
+        </h1>
+        <p style={{ margin: "0 0 10px", color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.55 }}>
+          A table contains three stories at once: the title race, qualification for continental cups,
+          and the fight to avoid relegation.
+        </p>
+        <AskAbout question="Teach me how to read a football league table and explain what the qualification and relegation zones mean." label="Explain league tables" />
+      </Pad>
       <ChipRail>
         {payload.map(p => (
           <Chip key={p.leagueId} active={active === p.leagueId} onClick={() => setActive(p.leagueId)}>
@@ -56,8 +69,14 @@ export function TablesClient({ payload }: { payload: Bundle[] }) {
           <div style={{ flex: 1 }} />
           <Link href={`/leagues/${b.leagueId}`} style={{
             color: "var(--accent-2)", fontSize: "var(--fs-xs)",
-          }}>fixtures →</Link>
+          }}>competition page →</Link>
         </div>
+        <StandingsContext
+          leagueName={b.leagueName}
+          season={b.season}
+          complete={b.complete}
+          rows={b.rows}
+        />
         <LeagueTable
           rows={b.rows}
           showForm={true}

@@ -88,6 +88,11 @@ input, select, textarea { font-family: inherit; color: inherit; }
    scrolls inside its own container instead */
 body { overflow-x: hidden; }
 
+@media (max-width: 520px) {
+  .fmp-table-detail,
+  .fmp-table-form { display: none; }
+}
+
 /* ---------- desktop breakpoint ---------- */
 @media (min-width: 900px) {
   .fmp-desktop-only { display: initial; }

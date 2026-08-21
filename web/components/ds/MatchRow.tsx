@@ -8,10 +8,13 @@ import React from 'react';
  * a "54% win" favorite, a live badge, or a "PREVIEW →" affordance.
  */
 export function MatchRow({ date, homeFlag, home, awayFlag, away, right = undefined, onClick, style = {}, ...rest }) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div
+    <Tag
+      type={onClick ? 'button' : undefined}
       onClick={onClick}
       style={{
+        width: '100%', color: 'inherit', fontFamily: 'inherit', textAlign: 'left',
         display: 'flex', alignItems: 'center', gap: '10px',
         background: 'var(--surface-panel)', border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)', padding: '9px 12px', marginBottom: '7px',
@@ -32,6 +35,6 @@ export function MatchRow({ date, homeFlag, home, awayFlag, away, right = undefin
         {away}<span style={{ marginLeft: '5px' }}>{awayFlag}</span>
       </div>
       {right && <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flex: '0 0 auto' }}>{right}</div>}
-    </div>
+    </Tag>
   );
 }

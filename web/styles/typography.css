@@ -25,14 +25,14 @@
   /* ---- Type scale (dense; small but legible) ---- */
   --fs-hero:    24px; /* team name hero (700, uppercase) */
   --fs-title:   18px; /* view titles */
-  --fs-h2:      15px; /* card / side headings */
+  --fs-h2:      16px; /* card / side headings */
   --fs-stat:    20px; /* stat-card value */
   --fs-display-num: 23px; /* xG / big score numbers */
-  --fs-body:    13px; /* base UI text */
-  --fs-sm:      12px; /* secondary UI */
-  --fs-xs:      11px; /* meta */
-  --fs-2xs:     10px; /* table headers, eyebrow */
-  --fs-micro:   9px;  /* tiny tags, captions */
+  --fs-body:    14px; /* base UI text */
+  --fs-sm:      13px; /* secondary UI */
+  --fs-xs:      12px; /* meta */
+  --fs-2xs:     11px; /* table headers, eyebrow */
+  --fs-micro:   10px; /* tiny tags, captions */
 
   /* ---- Line heights ---- */
   --lh-tight:  1.15;  /* @kind font */
@@ -41,10 +41,10 @@
   --lh-relaxed:1.65;  /* @kind font */
 
   /* ---- Tracking (mono is naturally wide; labels wider still) ---- */
-  --tracking-tight:  -0.02em; /* @kind font */
+  --tracking-tight:  0;       /* @kind font */
   --tracking-normal: 0;       /* @kind font */
-  --tracking-label:  0.1em;   /* @kind font */
-  --tracking-wide:   0.16em;  /* @kind font */
+  --tracking-label:  0;       /* @kind font */
+  --tracking-wide:   0;       /* @kind font */
 
   /* ---- Reusable roles ---- */
   --eyebrow-size: var(--fs-2xs);          /* @kind font */

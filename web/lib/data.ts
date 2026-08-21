@@ -334,7 +334,10 @@ export async function standingsForLeague(leagueId: number): Promise<{
   // years don't share the European Aug–May clock). Once next season's results
   // start landing, the table rolls over automatically; until then last
   // season's table shows as explicit FINAL standings, not as a live race.
-  const season = finals.find(m => m.season)?.season ?? sched.find(x => x.season)?.season ?? null;
+  const season = Array.from(new Set([
+    ...finals.map(m => m.season),
+    ...sched.map(m => m.season),
+  ].filter((x): x is string => !!x))).sort().at(-1) ?? null;
   const complete = season != null && !sched.some(x => x.season === season);
   const matches = season
     ? finals.filter(m => m.season === season)

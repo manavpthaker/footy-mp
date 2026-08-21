@@ -8,6 +8,7 @@ import { StatCard } from "@/components/ds";
 import { Crest } from "@/components/ds/Crest";
 import { FixtureItem } from "@/components/mobile/FixtureItem";
 import { FollowToggle } from "@/components/mobile/FollowToggle";
+import { AskAbout } from "@/components/search/AskAbout";
 import {
   loadFollowedEntities, countriesByIds, teamsByIds, leaguesByIds,
   upcomingForTeams, recentMovements,
@@ -152,14 +153,15 @@ export default async function FollowingPage() {
         {total === 0 && (
           <div style={{ textAlign: "center", padding: "26px 12px" }}>
             <div style={{ fontSize: 26, marginBottom: 8 }}>★</div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Nothing followed yet</div>
-            <div style={{ ...eyebrow, marginBottom: 14 }}>
-              hit ★ on any team, league, or player and it lands here — with its
-              fixtures, transfers, and news
+            <div style={{ fontWeight: 700, fontSize: "var(--fs-h2)", marginBottom: 7 }}>Build your football world</div>
+            <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.6, marginBottom: 14 }}>
+              Start with one country, one club and one competition. Follow stars add their
+              fixtures, transfers and news here without making you track everything.
             </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-              <Link href="/tables" style={pillStyle}>Browse tables</Link>
-              <Link href="/matches" style={pillStyle}>Browse matches</Link>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+              <Link href="/tables" style={pillStyle}>Choose a competition</Link>
+              <Link href="/map" style={pillStyle}>Use the Guide</Link>
+              <AskAbout question="Help me choose one national team, one club and one football competition to start following." label="Help me choose" />
             </div>
           </div>
         )}

@@ -25,9 +25,15 @@ interface Results {
 
 const EMPTY: Results = { teams: [], players: [], leagues: [], countries: [], playerClubs: {} };
 
-export function SearchChat({ onClose }: { onClose: () => void }) {
+export function SearchChat({
+  onClose,
+  initialQuery = "",
+}: {
+  onClose: () => void;
+  initialQuery?: string;
+}) {
   const router = useRouter();
-  const [q, setQ] = React.useState("");
+  const [q, setQ] = React.useState(initialQuery);
   const [results, setResults] = React.useState<Results>(EMPTY);
   const [chat, setChat] = React.useState<ChatMsg[]>([]);
   const [thinking, setThinking] = React.useState(false);
@@ -208,10 +214,10 @@ export function SearchChat({ onClose }: { onClose: () => void }) {
               <div style={{
                 marginTop: 16, display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center",
               }}>
-                {["Who's winning the Premier League?",
+                {["What matters in football today?",
+                  "How do clubs and national teams connect?",
                   "Explain promotion and relegation",
-                  "What happened in the World Cup final?",
-                  "Any big transfers lately?"].map(s => (
+                  "Which competition should I follow?"].map(s => (
                   <button key={s} onClick={() => ask(s)} style={{
                     border: "1px solid var(--border)", borderRadius: 999,
                     background: "var(--surface-panel)", color: "var(--text-muted)",

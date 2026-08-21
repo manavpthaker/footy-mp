@@ -14,12 +14,23 @@ import { TABS } from "./tabs";
  */
 export function AppHeader() {
   const [searchOpen, setSearchOpen] = React.useState(false);
+  const [initialQuery, setInitialQuery] = React.useState("");
   const pathname = usePathname() || "/";
   const seg = pathname === "/" ? "today" : pathname.split("/")[1];
   const activeId = TABS.some(t => t.id === seg) ? seg : detailToTab(pathname);
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric",
   }).toUpperCase();
+
+  React.useEffect(() => {
+    const openAsk = (event: Event) => {
+      const question = (event as CustomEvent<{ question?: string }>).detail?.question ?? "";
+      setInitialQuery(question);
+      setSearchOpen(true);
+    };
+    window.addEventListener("mpfc:ask", openAsk);
+    return () => window.removeEventListener("mpfc:ask", openAsk);
+  }, []);
 
   return (
     <header style={{
@@ -73,7 +84,7 @@ export function AppHeader() {
           })}
         </nav>
         <div style={{ flex: 1 }} />
-        <button onClick={() => setSearchOpen(true)} aria-label="Search & ask" style={{
+        <button onClick={() => { setInitialQuery(""); setSearchOpen(true); }} aria-label="Search & ask" style={{
           background: "transparent", border: "1px solid var(--border)",
           borderRadius: "var(--radius-md)", color: "var(--text-muted)",
           fontSize: 14, lineHeight: 1, padding: "7px 10px", cursor: "pointer",
@@ -87,7 +98,7 @@ export function AppHeader() {
           fontWeight: "var(--fw-semibold)",
         }}>{today}</div>
       </div>
-      {searchOpen && <SearchChat onClose={() => setSearchOpen(false)} />}
+      {searchOpen && <SearchChat initialQuery={initialQuery} onClose={() => setSearchOpen(false)} />}
     </header>
   );
 }
@@ -98,7 +109,7 @@ export function AppHeader() {
  */
 function detailToTab(pathname: string): string {
   if (pathname.startsWith("/matches")) return "matches";
-  if (pathname.startsWith("/news")) return "news";
+  if (pathname.startsWith("/news")) return "today";
   if (pathname.startsWith("/leagues") || pathname.startsWith("/tables")) return "tables";
   if (pathname.startsWith("/map")) return "map";
   if (pathname.startsWith("/teams") || pathname.startsWith("/players")) return "today";

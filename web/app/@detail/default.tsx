@@ -1,4 +1,7 @@
 import React from "react";
+import Link from "next/link";
+import { FootballLayers } from "@/components/guide/FootballLayers";
+import { AskAbout } from "@/components/search/AskAbout";
 
 /**
  * The right-pane placeholder shown on desktop when no detail route is active.
@@ -8,23 +11,39 @@ import React from "react";
 export default function DetailPlaceholder() {
   return (
     <div className="fmp-desktop-only" style={{
-      height: "100%", display: "grid", placeItems: "center", padding: "40px 32px",
+      minHeight: "100%", padding: "34px 32px 48px",
     }}>
-      <div style={{ textAlign: "center", maxWidth: 340 }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{
-          width: 38, height: 38, borderRadius: "var(--radius-sm)",
-          background: "var(--surface-raised)", border: "1px solid var(--border)",
-          display: "grid", placeItems: "center", margin: "0 auto 12px",
-          color: "var(--text-faint)", fontSize: 16,
-        }}>◆</div>
+          fontFamily: "var(--font-mono)", fontSize: "var(--fs-xs)",
+          color: "var(--accent)", fontWeight: 700, textTransform: "uppercase",
+        }}>Start here · the whole game in one view</div>
         <div style={{
-          fontWeight: 700, fontSize: "var(--fs-h2)",
-          textTransform: "uppercase", letterSpacing: "0.05em",
-        }}>Pick a team or a fixture</div>
+          marginTop: 8, fontWeight: 700, fontSize: 26, lineHeight: 1.12,
+        }}>One sport, four connected systems.</div>
         <div style={{
-          marginTop: 6, fontSize: "var(--fs-sm)",
-          color: "var(--text-faint)", lineHeight: "var(--lh-snug)",
-        }}>Matches, teams, players and tables you open land here.</div>
+          marginTop: 9, marginBottom: 20, maxWidth: 610, fontSize: "var(--fs-body)",
+          color: "var(--text-muted)", lineHeight: 1.65,
+        }}>Players work for clubs, clubs compete in leagues and cups, and countries
+          call those players away during international windows. Start with today&apos;s
+          stories, then follow any layer as deep as you want.</div>
+        <FootballLayers compact />
+        <div style={{
+          display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8,
+          marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border)",
+        }}>
+          <Link href="/map" style={{
+            padding: "8px 11px", borderRadius: "var(--radius-md)",
+            background: "var(--accent)", color: "var(--text-on-pitch)",
+            fontSize: "var(--fs-xs)", fontWeight: 700,
+          }}>Open the complete guide →</Link>
+          <Link href="/tables" style={{
+            padding: "8px 11px", border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)", fontSize: "var(--fs-xs)",
+            color: "var(--accent-2)", fontWeight: 700,
+          }}>Explore competitions</Link>
+          <AskAbout question="Give me a beginner's orientation to world football and tell me what matters today." />
+        </div>
       </div>
     </div>
   );

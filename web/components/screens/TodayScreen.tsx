@@ -2,6 +2,8 @@ import React from "react";
 import Link from "next/link";
 import { Pad, EmptyState, eyebrow, mono } from "@/components/mobile/primitives";
 import { FixtureItem } from "@/components/mobile/FixtureItem";
+import { DataFreshness } from "@/components/mobile/DataFreshness";
+import { AskAbout } from "@/components/search/AskAbout";
 // @ts-ignore
 import { SectionHeading } from "@/components/ds";
 // @ts-ignore
@@ -11,13 +13,15 @@ import { CompetitionBadge } from "@/components/ds";
 // @ts-ignore
 import { PlayerStatRow } from "@/components/ds";
 import {
-  loadFollowedEntities, upcomingForTeams, recentResultsForTeams,
+  loadFollowedEntities, upcomingForTeams,
   liveMatches, upcomingAll, resultsAll, MODEL_VERSION,
   seasonTotalsForPlayers, countriesByIds, recentMovements, nextUpByCompetition,
 } from "@/lib/data";
 import { flagFor, competitionCode, competitionTone, isPlaceholderTeam } from "@/lib/format";
 import type { RichMatch, PlayerAgg, RichMovement, CompetitionNext } from "@/lib/data";
 import type { Player, Country } from "@/lib/supabase";
+import { generalFootballNews } from "@/lib/news";
+import type { NewsItem } from "@/lib/news";
 
 export const dynamic = "force-dynamic";
 
@@ -26,16 +30,16 @@ export default async function TodayScreen() {
   const followedTeamIds = new Set<number>(teams.map(t => t.id));
   players.forEach(p => p.team_id && followedTeamIds.add(p.team_id));
 
-  const [live, allUpcoming, yoursUpcoming, yoursResults, allRecent, playerTotals, playerCountries, moves, nextUp] = await Promise.all([
+  const [live, allUpcoming, yoursUpcoming, allRecent, playerTotals, playerCountries, moves, nextUp, news] = await Promise.all([
     liveMatches(),
     upcomingAll(60),
     upcomingForTeams(Array.from(followedTeamIds), 20),
-    recentResultsForTeams(Array.from(followedTeamIds), 6),
     resultsAll(30),
     seasonTotalsForPlayers(players.map(p => p.id)),
     countriesByIds(players.map(p => p.country_id).filter((x): x is number => x != null)),
     recentMovements(6),
     nextUpByCompetition(),
+    generalFootballNews(3),
   ]);
   const intlNext = nextUp.filter(n =>
     ["tournament", "qualifiers"].includes(n.league.format ?? (n.league.is_international ? "tournament" : ""))
@@ -63,107 +67,288 @@ export default async function TodayScreen() {
       Number(isFollowed(b, followedTeamIds)) - Number(isFollowed(a, followedTeamIds))
       || +new Date(b.kickoff_utc) - +new Date(a.kickoff_utc))
     .slice(0, 4);
-  const justIn = recent.length ? recent : yoursResults.slice(0, 4);
+  const playersWithStats = players.filter(p => playerTotals[p.id]);
+  const newestUpdatedAt = newestTimestamp([...live, ...allUpcoming, ...allRecent].map(m => m.updated_at));
+  const stories = buildBriefStories({ live, hero, recent, news, moves, intlNext });
 
   return (
     <div>
-      
       <Pad style={{ paddingTop: 12 }}>
-        <div className="">
-          {/* Left / main column: hero + your matches */}
-          <div>
-            {live.map(m => <LiveHeroCard key={m.id} m={m} />)}
-            {hero && <NextMatchCard m={hero} followedTeamIds={followedTeamIds} followed={heroFollowed} />}
+        <WorldBrief stories={stories} />
+        <DataFreshness
+          updatedAt={newestUpdatedAt}
+          upcomingCount={allUpcoming.length}
+          latestResultAt={allRecent[0]?.kickoff_utc}
+        />
+        <WorldPulse nextUp={nextUp} moves={moves} />
 
-            <SectionHeading tick="var(--gold)">Next up for you</SectionHeading>
-            {yours.length > 1
-              ? yours.slice(1, 5).map(m => (
-                  <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />
-                ))
-              : <div style={{ ...eyebrow, margin: "0 2px 4px" }}>
-                  {yours.length === 0
-                    ? "nobody you follow plays soon — the wider calendar below"
-                    : "that's everything scheduled for your list right now"}
-                </div>}
+        <SectionHeading tick="var(--accent-2)"
+          trailing={<Link href="/matches" style={{ color: "var(--accent-2)", fontSize: "var(--fs-xs)" }}>
+            all matches →
+          </Link>}
+        >Matches to watch</SectionHeading>
+        {live.map(m => <LiveHeroCard key={m.id} m={m} />)}
+        {hero && <NextMatchCard m={hero} followedTeamIds={followedTeamIds} followed={heroFollowed} />}
+        {!live.length && !hero && (
+          <EmptyState>No future fixtures are loaded. Results and competition context remain available below.</EmptyState>
+        )}
+        {yours.slice(heroFollowed ? 1 : 0, 4).map(m => (
+          <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />
+        ))}
 
-            {justIn.length > 0 && (
-              <>
-                <SectionHeading
-                  trailing={<Link href="/matches" style={{
-                    color: "var(--accent-2)", fontSize: "var(--fs-xs)",
-                  }}>all →</Link>}
-                >Just in</SectionHeading>
-                {justIn.map(m => (
-                  <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />
-                ))}
-              </>
-            )}
+        {recent.length > 0 && (
+          <>
+            <SectionHeading>Latest results</SectionHeading>
+            {recent.map(m => <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />)}
+          </>
+        )}
+
+        {wcKnockout.length > 0 && (
+          <>
+            <SectionHeading tick="var(--accent-2)">World Cup · knockouts</SectionHeading>
+            {wcKnockout.map(m => <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />)}
+          </>
+        )}
+
+        {playersWithStats.length > 0 && (
+          <>
+            <SectionHeading tick="var(--follow)">Your players</SectionHeading>
+            {playersWithStats.map(p => (
+              <PlayerRow key={p.id} p={p}
+                agg={playerTotals[p.id]}
+                country={p.country_id ? playerCountries[p.country_id] ?? null : null} />
+            ))}
+          </>
+        )}
+
+        <SectionHeading tick="var(--gold)"
+          trailing={<Link href="/map#road-to-2030" style={{
+            color: "var(--accent-2)", fontSize: "var(--fs-xs)",
+          }}>open guide →</Link>}
+        >Road to 2030</SectionHeading>
+        {intlNext.length > 0 ? intlNext.map(n => <NextCompRow key={n.league.id} n={n} />) : (
+          <div style={{
+            color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.55,
+            padding: "0 2px 8px",
+          }}>
+            No international dates are loaded yet. The Guide explains what happens
+            between windows and how qualification leads to 2030.
           </div>
-
-          {/* Right / sidebar column: cup + players */}
-          <div>
-            {wcKnockout.length > 0 && (
-              <>
-                <SectionHeading
-                  tick="var(--accent-2)"
-                  trailing={<Link href="/matches" style={{
-                    color: "var(--accent-2)", fontSize: "var(--fs-xs)",
-                  }}>all →</Link>}
-                >World Cup · knockouts</SectionHeading>
-                {wcKnockout.map(m => <FixtureItem key={m.id} m={m} followedTeamIds={followedTeamIds} />)}
-              </>
-            )}
-
-            {players.length > 0 && (
-              <>
-                <SectionHeading tick="var(--gold)">Your players</SectionHeading>
-                {players.map(p => (
-                  <PlayerRow key={p.id} p={p}
-                    agg={playerTotals[p.id] ?? null}
-                    country={p.country_id ? playerCountries[p.country_id] ?? null : null} />
-                ))}
-              </>
-            )}
-
-            <SectionHeading tick="var(--gold)"
-              trailing={<Link href="/map" style={{
-                color: "var(--accent-2)", fontSize: "var(--fs-xs)",
-              }}>the map →</Link>}
-            >Road to 2030</SectionHeading>
-            {intlNext.length > 0 ? intlNext.map(n => <NextCompRow key={n.league.id} n={n} />) : (
-              <div style={{ ...eyebrow, margin: "0 2px 8px" }}>
-                no international dates on the books yet — qualifiers land here as
-                federations schedule them
-              </div>
-            )}
-            <Link href="/map" style={{
-              display: "block", textDecoration: "none", color: "inherit",
-              background: "var(--surface-tint)", border: "1px solid var(--border)",
-              borderRadius: "var(--radius-lg)", padding: "9px 12px", marginBottom: 7,
-              fontSize: "var(--fs-xs)", lineHeight: 1.55,
-            }}>
-              <b>New to the sport&apos;s plumbing?</b>{" "}
-              <span style={{ color: "var(--text-muted)" }}>
-                The Map explains how leagues, cups, clubs and national teams fit
-                together — and the 4-year road from this World Cup to 2030.
-              </span>
-            </Link>
-
-            {moves.length > 0 && (
-              <>
-                <SectionHeading tick="var(--accent-2)">Movement</SectionHeading>
-                {moves.map(mv => <MovementRow key={mv.id} mv={mv} />)}
-              </>
-            )}
-          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <Link href="/map" style={{
+            padding: "8px 11px", borderRadius: "var(--radius-md)",
+            background: "var(--surface-panel)", border: "1px solid var(--border)",
+            color: "var(--accent-2)", fontSize: "var(--fs-xs)", fontWeight: 700,
+          }}>How football fits together →</Link>
+          <AskAbout question="What is happening in world football right now, why does it matter, and what should I follow next?" />
         </div>
+
+        {moves.length > 0 && (
+          <>
+            <SectionHeading tick="var(--accent-2)">Player and club movement</SectionHeading>
+            {moves.map(mv => <MovementRow key={mv.id} mv={mv} />)}
+          </>
+        )}
 
         <div style={{
           ...eyebrow, textAlign: "center", padding: "14px 0 6px",
-        }}>xG Dixon-Coles on real shot data · not betting advice</div>
+        }}>Model details are available after the story · not betting advice</div>
       </Pad>
     </div>
   );
+}
+
+interface BriefStory {
+  label: string;
+  title: string;
+  why: string;
+  next: string;
+  href: string;
+  external?: boolean;
+  color: string;
+}
+
+function WorldBrief({ stories }: { stories: BriefStory[] }) {
+  return (
+    <section aria-labelledby="world-brief-title" style={{ marginBottom: 14 }}>
+      <div style={{ ...eyebrow, color: "var(--accent)" }}>Your 5-minute orientation</div>
+      <h1 id="world-brief-title" style={{
+        margin: "5px 0 7px", fontSize: 24, lineHeight: 1.15, letterSpacing: 0,
+      }}>The world of football, today.</h1>
+      <p style={{
+        margin: "0 0 13px", color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.55,
+      }}>Start with what matters. Each story tells you why it belongs in the bigger picture and where to go next.</p>
+      <div style={{ display: "grid", gap: 7 }}>
+        {stories.map((story, index) => {
+          const body = (
+            <>
+              <div style={{
+                fontFamily: "var(--font-mono)", fontSize: "var(--fs-xs)", color: story.color,
+                fontWeight: 700,
+              }}>{String(index + 1).padStart(2, "0")} · {story.label}</div>
+              <div style={{ fontSize: "var(--fs-h2)", fontWeight: 700, marginTop: 4, lineHeight: 1.3 }}>
+                {story.title}
+              </div>
+              <div style={{ marginTop: 5, fontSize: "var(--fs-sm)", lineHeight: 1.55, color: "var(--text-muted)" }}>
+                <b style={{ color: "var(--text-primary)" }}>Why it matters:</b> {story.why}
+              </div>
+              <div style={{ marginTop: 6, color: story.color, fontSize: "var(--fs-xs)", fontWeight: 700 }}>
+                {story.next} →
+              </div>
+            </>
+          );
+          const style: React.CSSProperties = {
+            display: "block", padding: "11px 12px", color: "inherit", textDecoration: "none",
+            background: "var(--surface-panel)", border: "1px solid var(--border)",
+            borderLeft: `3px solid ${story.color}`, borderRadius: "var(--radius-md)",
+          };
+          return story.external
+            ? <a key={`${story.label}-${story.href}`} href={story.href} target="_blank" rel="noreferrer" style={style}>{body}</a>
+            : <Link key={`${story.label}-${story.href}`} href={story.href} style={style}>{body}</Link>;
+        })}
+      </div>
+      <div style={{ textAlign: "right", marginTop: 8 }}>
+        <Link href="/news" style={{ color: "var(--accent-2)", fontSize: "var(--fs-xs)", fontWeight: 700 }}>
+          Open the full news wire →
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function WorldPulse({ nextUp, moves }: { nextUp: CompetitionNext[]; moves: RichMovement[] }) {
+  const nextFor = (formats: string[]) => nextUp.find(n => formats.includes(n.league.format ?? ""));
+  const items = [
+    ["Club leagues", nextFor(["league"]), "/tables", "var(--accent-2)"],
+    ["Continental cups", nextFor(["cup"]), "/map#competitions", "var(--accent)"],
+    ["National teams", nextFor(["qualifiers", "tournament", "friendly"]), "/map#national-teams", "var(--gold)"],
+  ] as const;
+  return (
+    <section aria-label="State of the football world">
+      <div style={{ ...eyebrow, marginBottom: 7 }}>The world at a glance</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+        {items.map(([label, item, href, color]) => (
+          <Link key={label} href={href} style={{
+            minHeight: 74, padding: "9px 10px", background: "var(--surface-panel)",
+            border: "1px solid var(--border)", borderRadius: "var(--radius-md)",
+          }}>
+            <div style={{ fontSize: "var(--fs-xs)", color, fontWeight: 700 }}>{label}</div>
+            <div style={{ marginTop: 4, fontSize: "var(--fs-sm)", lineHeight: 1.4, color: "var(--text-muted)" }}>
+              {item ? `${item.league.name} · ${shortDate(item.next.kickoff_utc)}` : "No future dates loaded"}
+            </div>
+          </Link>
+        ))}
+        <Link href="/following" style={{
+          minHeight: 74, padding: "9px 10px", background: "var(--surface-panel)",
+          border: "1px solid var(--border)", borderRadius: "var(--radius-md)",
+        }}>
+          <div style={{ fontSize: "var(--fs-xs)", color: "var(--follow)", fontWeight: 700 }}>Transfer market</div>
+          <div style={{ marginTop: 4, fontSize: "var(--fs-sm)", lineHeight: 1.4, color: "var(--text-muted)" }}>
+            {moves[0] ? `Latest movement noticed ${shortDate(moves[0].noticed_at)}` : "No recent movement loaded"}
+          </div>
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function buildBriefStories({
+  live, hero, recent, news, moves, intlNext,
+}: {
+  live: RichMatch[];
+  hero: RichMatch | null;
+  recent: RichMatch[];
+  news: NewsItem[];
+  moves: RichMovement[];
+  intlNext: CompetitionNext[];
+}): BriefStory[] {
+  const stories: BriefStory[] = [];
+  const liveMatch = live[0];
+  if (liveMatch) {
+    stories.push({
+      label: "Live now",
+      title: `${liveMatch.home_team?.name ?? "TBD"} ${liveMatch.home_goals ?? 0}–${liveMatch.away_goals ?? 0} ${liveMatch.away_team?.name ?? "TBD"}`,
+      why: `${liveMatch.league?.name ?? "This competition"} is active now; the match page connects the score to form, stakes and the pre-match view.`,
+      next: "Follow the match",
+      href: `/matches/${liveMatch.id}`,
+      color: "var(--status-live)",
+    });
+  } else if (hero) {
+    stories.push({
+      label: "Next on the calendar",
+      title: `${hero.home_team?.name ?? "TBD"} v ${hero.away_team?.name ?? "TBD"}`,
+      why: `${hero.league?.name ?? "This match"} is the next tracked fixture. Its page explains the competition context before showing the model.`,
+      next: `${shortDate(hero.kickoff_utc)} · open preview`,
+      href: `/matches/${hero.id}`,
+      color: "var(--accent-2)",
+    });
+  }
+  const result = recent[0];
+  if (result) {
+    stories.push({
+      label: "Just finished",
+      title: `${result.home_team?.name ?? "TBD"} ${result.home_goals ?? 0}–${result.away_goals ?? 0} ${result.away_team?.name ?? "TBD"}`,
+      why: `A fresh ${result.league?.name ?? "football"} result. Open it to see what happened and how it compared with expectations.`,
+      next: "Read the result in context",
+      href: `/matches/${result.id}`,
+      color: "var(--accent)",
+    });
+  }
+  const headline = news[0];
+  if (headline) {
+    stories.push({
+      label: "In the news",
+      title: headline.title,
+      why: `This is one of the newest broad football reports${headline.source ? ` from ${headline.source}` : ""}; use it as a doorway into the current news cycle.`,
+      next: "Open the report",
+      href: headline.url,
+      external: true,
+      color: "var(--gold)",
+    });
+  }
+  const intl = intlNext[0];
+  if (intl) {
+    stories.push({
+      label: "Road to 2030",
+      title: `${intl.league.name} returns ${shortDate(intl.next.kickoff_utc)}`,
+      why: "National teams only gather in short windows, so each date is part of a much longer qualification cycle.",
+      next: "See the international calendar",
+      href: `/leagues/${intl.league.id}`,
+      color: "var(--gold)",
+    });
+  } else if (moves[0]) {
+    const movement = moves[0];
+    stories.push({
+      label: "The market",
+      title: movement.kind === "transfer"
+        ? `${movement.player?.name ?? "A player"}: ${movement.from_team?.name ?? "?"} → ${movement.to_team?.name ?? "?"}`
+        : movement.note ?? "A club changed leagues",
+      why: "Transfers and promotion change which clubs, leagues and national-team pools connect to one another.",
+      next: "Trace the movement",
+      href: movement.player ? `/players/${movement.player.id}` : "/following",
+      color: "var(--follow)",
+    });
+  }
+  if (stories.length < 3) {
+    stories.push({
+      label: "Start here",
+      title: "How players, clubs, competitions and countries fit together",
+      why: "Once the four layers are clear, every fixture, table and transfer has a place in the larger world.",
+      next: "Open the complete Guide",
+      href: "/map",
+      color: "var(--accent)",
+    });
+  }
+  return stories.slice(0, 4);
+}
+
+function newestTimestamp(values: Array<string | null | undefined>): string | null {
+  return values.filter((x): x is string => !!x).sort().at(-1) ?? null;
+}
+
+function shortDate(value: string): string {
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function isFollowed(m: RichMatch, ids: Set<number>) {

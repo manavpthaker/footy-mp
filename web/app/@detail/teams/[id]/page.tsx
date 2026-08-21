@@ -15,6 +15,7 @@ import { newsForTeam } from "@/lib/news";
 import { NewsList } from "@/components/ds/NewsList";
 import { Crest } from "@/components/ds/Crest";
 import { FollowToggle } from "@/components/mobile/FollowToggle";
+import { AskAbout } from "@/components/search/AskAbout";
 import { flagFor } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,19 @@ export default async function TeamDetail({ params }: { params: { id: string } })
         </span>}
         right={<FollowToggle entityType="team" entityId={id} initialFollowed={followed} />}
       />
+      <Pad style={{ paddingTop: 12 }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 9,
+          borderBottom: "1px solid var(--border)", paddingBottom: 12,
+        }}>
+          <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.55, flex: "1 1 280px" }}>
+            {team.is_national
+              ? "A national team assembled during international windows from players employed by clubs around the world."
+              : `A club competing week to week${league ? ` in the ${league.name}` : ""}; its players may leave temporarily for national-team duty.`}
+          </div>
+          <AskAbout question={`Give me a newcomer-friendly overview of ${team.name}: who they are, what they are playing for, and who I should know.`} />
+        </div>
+      </Pad>
       <TeamClient
         team={JSON.parse(JSON.stringify(team))}
         rating={rating ? { att: Number(rating.attack ?? 1), def: Number(rating.defense ?? 1), overall } : null}

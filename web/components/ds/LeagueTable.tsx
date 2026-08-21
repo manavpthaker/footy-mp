@@ -37,9 +37,9 @@ export function LeagueTable({ rows, onSelect = undefined, showForm = true, style
         <thead>
           <tr>
             <th style={{ ...th, textAlign: 'left', paddingLeft: '13px' }}>Team</th>
-            <th style={th}>P</th><th style={th}>W</th><th style={th}>D</th><th style={th}>L</th>
+            <th style={th}>P</th><th className="fmp-table-detail" style={th}>W</th><th className="fmp-table-detail" style={th}>D</th><th className="fmp-table-detail" style={th}>L</th>
             <th style={th}>GD</th><th style={{ ...th, minWidth: '30px' }}>Pts</th>
-            {showForm && <th style={{ ...th, minWidth: '58px' }}>Form</th>}
+            {showForm && <th className="fmp-table-form" style={{ ...th, minWidth: '58px' }}>Form</th>}
           </tr>
         </thead>
         <tbody>
@@ -49,6 +49,14 @@ export function LeagueTable({ rows, onSelect = undefined, showForm = true, style
               <tr
                 key={r.team}
                 onClick={() => onSelect && onSelect(r.team)}
+                onKeyDown={(e) => {
+                  if (onSelect && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    onSelect(r.team);
+                  }
+                }}
+                tabIndex={onSelect ? 0 : undefined}
+                role={onSelect ? 'link' : undefined}
                 style={{
                   cursor: onSelect ? 'pointer' : 'default',
                   boxShadow: rail !== 'transparent' ? `inset 3px 0 0 ${rail}` : 'none',
@@ -57,7 +65,7 @@ export function LeagueTable({ rows, onSelect = undefined, showForm = true, style
                 onMouseEnter={(e) => { if (onSelect) e.currentTarget.style.background = 'var(--surface-hover)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
-                <td style={{ ...td, fontFamily: 'var(--font-ui)', textAlign: 'left', paddingLeft: '9px', fontWeight: 'var(--fw-semibold)', whiteSpace: 'nowrap' }}>
+                <td style={{ ...td, fontFamily: 'var(--font-ui)', textAlign: 'left', paddingLeft: '9px', fontWeight: 'var(--fw-semibold)', whiteSpace: 'nowrap', maxWidth: '230px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   <span style={{ display: 'inline-block', width: '19px', color: 'var(--text-faint)', fontSize: 'var(--fs-2xs)', fontFamily: 'var(--font-mono)' }}>{r.pos ! ? r.pos : i + 1}</span>
                   <span style={{ display: 'inline-block', width: '20px', textAlign: 'center', marginRight: '6px', fontSize: '14px', verticalAlign: 'middle' }}>
                     {r.crest ? <Crest team={r.crest} size={16} /> : (r.flag || '⚽')}
@@ -65,11 +73,11 @@ export function LeagueTable({ rows, onSelect = undefined, showForm = true, style
                   {r.team}
                   {r.followed && <span style={{ marginLeft: '5px', color: 'var(--follow)', fontSize: 'var(--fs-xs)' }}>★</span>}
                 </td>
-                <td style={td}>{r.P}</td><td style={td}>{r.W}</td><td style={td}>{r.D}</td><td style={td}>{r.L}</td>
+                <td style={td}>{r.P}</td><td className="fmp-table-detail" style={td}>{r.W}</td><td className="fmp-table-detail" style={td}>{r.D}</td><td className="fmp-table-detail" style={td}>{r.L}</td>
                 <td style={td}>{r.GD > 0 ? '+' : ''}{r.GD}</td>
                 <td style={{ ...td, fontWeight: 'var(--fw-extrabold)', color: 'var(--text-primary)' }}>{r.Pts}</td>
                 {showForm && (
-                  <td style={{ ...td, letterSpacing: '0.14em', fontSize: 'var(--fs-2xs)', fontWeight: 'var(--fw-bold)' }}>
+                  <td className="fmp-table-form" style={{ ...td, letterSpacing: 0, fontSize: 'var(--fs-2xs)', fontWeight: 'var(--fw-bold)' }}>
                     {(r.form || []).map((f, j) => (
                       <span key={j} style={{ color: formColor(f) }}>{f}</span>
                     ))}

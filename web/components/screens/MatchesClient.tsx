@@ -17,24 +17,24 @@ export function MatchesClient({
 }: {
   upcoming: RichMatch[]; results: RichMatch[]; followedTeamIds: number[];
 }) {
-  const [mode, setMode] = React.useState<"upcoming" | "results">("upcoming");
+  const [mode, setMode] = React.useState<"upcoming" | "results">(upcoming.length ? "upcoming" : "results");
   const [comp, setComp] = React.useState("all");
   const [onlyFollowed, setOnlyFollowed] = React.useState(false);
   const followedSet = React.useMemo(() => new Set(initialFollowed), [initialFollowed]);
 
   // competitions that actually have matches in view — the rail adapts as
   // qualifiers, cups and new leagues flow in over the 4-year arc
+  const source = mode === "upcoming" ? upcoming : results;
   const compOptions = React.useMemo(() => {
     const names = new Set<string>();
-    for (const m of [...upcoming, ...results]) if (m.league?.name) names.add(m.league.name);
+    for (const m of source) if (m.league?.name) names.add(m.league.name);
     const sorted = Array.from(names).sort((a, b) => {
       const ai = COMP_PRIORITY.indexOf(a); const bi = COMP_PRIORITY.indexOf(b);
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.localeCompare(b);
     });
     return [{ id: "all", label: "All" }, ...sorted.map(n => ({ id: n, label: n }))];
-  }, [upcoming, results]);
+  }, [source]);
 
-  const source = mode === "upcoming" ? upcoming : results;
   const filtered = source.filter(m => {
     if (comp !== "all" && m.league?.name !== comp) return false;
     if (onlyFollowed && !isFollowed(m, followedSet) && m.status !== "live") return false;
@@ -46,6 +46,17 @@ export function MatchesClient({
   return (
     <div>
       <Pad style={{ paddingTop: 12, paddingBottom: 10 }}>
+        <div style={{ ...eyebrow, color: "var(--accent)" }}>Calendar and results</div>
+        <h1 style={{ margin: "5px 0 11px", fontSize: 23, lineHeight: 1.2, letterSpacing: 0 }}>
+          Follow the games, then open the story.
+        </h1>
+        {upcoming.length === 0 && results.length > 0 && (
+          <div role="status" style={{
+            marginBottom: 10, padding: "8px 10px", border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)", background: "var(--surface-tint)",
+            color: "var(--gold)", fontSize: "var(--fs-xs)", lineHeight: 1.45,
+          }}>No future fixtures are loaded, so the latest available results are shown.</div>
+        )}
         <Segmented value={mode} onChange={setMode} options={[
           { value: "upcoming", label: "Upcoming" },
           { value: "results", label: "Results" },
@@ -63,7 +74,16 @@ export function MatchesClient({
           <FixtureGroup key={g.label} label={g.label}>
             {g.items.map(m => <FixtureItem key={m.id} m={m} followedTeamIds={followedSet} />)}
           </FixtureGroup>
-        )) : <EmptyState>Nothing here — clear a filter.</EmptyState>}
+        )) : source.length === 0 ? (
+          <div style={{
+            border: "1px solid var(--border)", borderRadius: "var(--radius-md)",
+            padding: "14px", color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.55,
+          }}>
+            {mode === "upcoming"
+              ? "No future fixtures are currently loaded. Switch to Results to explore the latest available matches."
+              : "No finished matches are currently loaded."}
+          </div>
+        ) : <EmptyState>Nothing matches these filters. Clear a competition or Following filter.</EmptyState>}
       </Pad>
     </div>
   );

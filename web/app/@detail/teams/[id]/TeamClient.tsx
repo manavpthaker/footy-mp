@@ -36,7 +36,7 @@ export function TeamClient({
   const followedSet = React.useMemo(() => new Set(followedTeamIds), [followedTeamIds]);
   return (
     <Pad style={{ paddingTop: 14 }}>
-      {rating && (
+      {tab === "model" && rating && (
         <div style={{
           display: "flex", alignItems: "center", gap: 14,
           background: "var(--surface-panel)", border: "1px solid var(--border)",

@@ -4,6 +4,8 @@
  * get a cookie-aware @supabase/ssr client.
  */
 import { server, Team, Player, League, Country, Match, Movement, Prediction, Follow, ModelRating, EntityType } from "./supabase";
+import { normalizeSeason } from "./seasons";
+import { withKickoffConfidence } from "./kickoff";
 
 export const USER_ID = "mp";
 export const MODEL_VERSION = "footy-mp-v2";
@@ -45,6 +47,7 @@ export async function loadFollowedEntities(): Promise<{
 // ---------- Matches ----------
 
 export interface RichMatch extends Match {
+  kickoff_confirmed?: boolean | null;
   home_team?: Team;
   away_team?: Team;
   league?: League;
@@ -62,7 +65,7 @@ export async function upcomingForTeams(teamIds: number[], limit = 20): Promise<R
     .or(teamIds.map(id => `home_team_id.eq.${id},away_team_id.eq.${id}`).join(","))
     .order("kickoff_utc", { ascending: true })
     .limit(limit);
-  return enrich((data ?? []) as Match[]);
+  return withKickoffConfidence(await enrich((data ?? []) as Match[]));
 }
 
 export async function recentResultsForTeams(teamIds: number[], limit = 20): Promise<RichMatch[]> {
@@ -257,7 +260,7 @@ export async function getMatch(id: number): Promise<RichMatch | null> {
   const s = await server();
   const { data } = await s.from("matches").select("*").eq("id", id).maybeSingle();
   if (!data) return null;
-  const rich = await enrich([data as Match]);
+  const rich = await withKickoffConfidence(await enrich([data as Match]));
   return rich[0] ?? null;
 }
 
@@ -326,8 +329,9 @@ export async function standingsForLeague(leagueId: number): Promise<{
     s.from("teams").select("*").eq("league_id", leagueId),
     s.from("follows").select("*").eq("user_id", USER_ID).eq("entity_type", "team"),
   ]);
-  const finals = (finalsRes.data ?? []) as Match[];
-  const sched = (schedRes.data ?? []) as Array<{ season: string | null }>;
+  const finals = ((finalsRes.data ?? []) as Match[]).map(m => ({ ...m, season: normalizeSeason(m.season) }));
+  const sched = ((schedRes.data ?? []) as Array<{ season: string | null }>)
+    .map(m => ({ ...m, season: normalizeSeason(m.season) }));
 
   // Which season is "current" for THIS league? The season of its most recent
   // result — never a date heuristic (calendar leagues like MLS and tournament

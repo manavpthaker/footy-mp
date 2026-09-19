@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { getChatConfig } from "@/lib/chat-config";
 import { sameOrigin } from "@/lib/admin";
 import { searchEntities } from "@/lib/search";
 import {
@@ -23,7 +24,6 @@ export const maxDuration = 60; // tool loops need more than the default 10s
  * uses for The Lowdown). Without it the endpoint degrades to a clear message.
  */
 
-const MODEL = process.env.OPENAI_CHAT_MODEL ?? "gpt-5-mini";
 const MAX_TURNS = 16;             // history cap sent to the model
 const MAX_TOOL_ROUNDS = 8;        // tool-loop cap per question
 
@@ -311,9 +311,12 @@ export async function POST(req: Request) {
   if (!sameOrigin(req)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  if (!process.env.OPENAI_API_KEY) {
+  let config;
+  try { config = await getChatConfig(); }
+  catch { return NextResponse.json({ reply: "Chat settings could not be read. Open Chat settings and try again." }, { status: 503 }); }
+  if (!config.apiKey) {
     return NextResponse.json({
-      reply: "Chat isn't configured yet — add OPENAI_API_KEY to the deployment environment.",
+      reply: "Chat needs an API key. Open Chat settings to add it from your phone.",
     });
   }
 
@@ -335,7 +338,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "no question" }, { status: 400 });
   }
 
-  const client = new OpenAI();
+  const client = new OpenAI({ apiKey: config.apiKey });
   try {
     const appTools = buildTools();
     const tools = appTools.map(tool => tool.definition);
@@ -345,7 +348,7 @@ export async function POST(req: Request) {
 
     while (true) {
       const response = await client.responses.create({
-        model: MODEL,
+        model: config.model,
         instructions: SYSTEM,
         input,
         tools,
@@ -406,7 +409,7 @@ export async function POST(req: Request) {
       toolRounds += 1;
     }
   } catch (e: any) {
-    console.error("[chat]", e?.message ?? e);
+    console.error("[chat] provider request failed", { status: e?.status, type: e?.name });
     return NextResponse.json({
       reply: "Something went wrong talking to the model — give it another try in a moment.",
     });

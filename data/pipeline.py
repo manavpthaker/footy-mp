@@ -71,8 +71,12 @@ def _ensure_leagues(names: list[str]) -> dict[str, int]:
 def ingest_espn(days_back: int = 3, days_fwd: int = 7,
                 leagues: list[str] | None = None) -> int:
     leagues = leagues or DEFAULT_LEAGUES
+    unknown = set(leagues) - set(LEAGUES)
+    if unknown:
+        raise ValueError(f"Unknown ESPN leagues: {sorted(unknown)}")
     league_ids = _ensure_leagues(leagues)
     written = 0
+    failures = []
     for name in leagues:
         L = LEAGUES.get(name)
         espn_slug = L.espn if L else LEAGUE_SOURCES.get(name, (None, None))[0]
@@ -81,7 +85,11 @@ def ingest_espn(days_back: int = 3, days_fwd: int = 7,
         if not espn_slug:
             continue
         for day in _daterange(days_back, days_fwd):
-            raw = espn.fetch_day(espn_slug, day)
+            try:
+                raw = espn.fetch_day(espn_slug, day)
+            except RuntimeError:
+                failures.append(f"{name}/{day}")
+                continue
             if not raw:
                 continue
             rows = []
@@ -127,6 +135,9 @@ def ingest_espn(days_back: int = 3, days_fwd: int = 7,
                 db.upsert_matches(rows)
                 written += len(rows)
                 print(f"[espn] {name} {day}: upserted {len(rows)} matches")
+    if failures:
+        raise RuntimeError(f"ESPN refresh incomplete: {len(failures)} failed requests; "
+                           f"{written} matches saved. First failures: {failures[:3]}")
     return written
 
 
@@ -493,6 +504,15 @@ def main() -> int:
             season = os.environ.get("PIPELINE_UNDERSTAT_SEASON", _current_understat_season())
             m = ingest_understat([season])
             print(f"[pipeline] daily done: {n} matches, {m} stat rows")
+        elif mode == "fixtures":
+            # Scores and schedules can recover independently of model/xG providers.
+            days_back = int(os.environ.get("PIPELINE_DAYS_BACK", "7"))
+            days_fwd = int(os.environ.get("PIPELINE_DAYS_FORWARD", "21"))
+            if not 0 <= days_back <= 120 or not 0 <= days_fwd <= 90:
+                raise ValueError("Fixture window must be 0–120 days back and 0–90 forward")
+            names = [n.strip() for n in os.environ.get("PIPELINE_ESPN_LEAGUES", "").split(",") if n.strip()]
+            n = ingest_espn(days_back=days_back, days_fwd=days_fwd, leagues=names or None)
+            print(f"[pipeline] fixtures done: {n} matches")
         elif mode == "live":
             if not _live_window_active():
                 print("[pipeline] live: no live matches or kickoffs within ±3h — skipping")

@@ -101,13 +101,13 @@ export async function POST(req: Request) {
   }
 
   const updates = new Map<string, EspnUpdate>();
-  await Promise.allSettled(
+  const pulls = await Promise.allSettled(
     slugs.flatMap(slug => utcDates().map(async date => {
       const res = await fetch(
         `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${date}`,
-        { cache: "no-store" },
+        { cache: "no-store", signal: AbortSignal.timeout(8000) },
       );
-      if (!res.ok) return;
+      if (!res.ok) throw new Error("Score provider unavailable");
       const data = await res.json();
       for (const ev of data?.events ?? []) {
         const u = parseEvent(ev);
@@ -115,23 +115,27 @@ export async function POST(req: Request) {
       }
     })),
   );
+  const failed = pulls.filter(p => p.status === "rejected").length;
 
   if (updates.size === 0) {
-    return NextResponse.json({ ok: true, updated: 0 });
+    return NextResponse.json({ ok: failed === 0, updated: 0, failed }, { status: failed ? 502 : 200 });
   }
 
   const ids = Array.from(updates.keys());
-  const { data: known } = await supabase
+  const { data: known, error: readError } = await supabase
     .from("matches").select("id,espn_event_id").in("espn_event_id", ids);
 
   let updated = 0;
+  let writeFailures = 0;
   for (const row of known ?? []) {
     const u = updates.get(String(row.espn_event_id));
     if (!u) continue;
     const { espn_event_id: _ignored, ...fields } = u;
     const { error } = await supabase.from("matches").update(fields).eq("id", row.id);
     if (!error) updated++;
+    else writeFailures++;
   }
 
-  return NextResponse.json({ ok: true, updated, seen: updates.size });
+  const ok = !readError && failed === 0 && writeFailures === 0;
+  return NextResponse.json({ ok, updated, seen: updates.size, failed, writeFailures }, { status: ok ? 200 : 502 });
 }

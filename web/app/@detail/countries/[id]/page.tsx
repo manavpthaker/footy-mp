@@ -45,12 +45,13 @@ export default async function CountryDetail({ params }: { params: { id: string }
         right={<FollowToggle entityType="country" entityId={id} initialFollowed={followed} />}
       />
       <Pad style={{ paddingTop: 14 }}>
+        {team && <Link className="circle-game" href={`/?team=${team.id}`}><strong>Follow the players to their clubs →</strong><span className="circle-small">Then meet the teammates from other countries.</span></Link>}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 9,
           borderBottom: "1px solid var(--border)", paddingBottom: 12, marginBottom: 12,
         }}>
           <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.55, flex: "1 1 260px" }}>
-            National teams meet only during short windows. The club list below shows where this player pool develops between camps.
+            Start with a few players, then follow their clubs between international games. This is the stored player pool, not a confirmed current call-up list; some club links may lag transfers.
           </div>
           <AskAbout question={`Explain ${country.name}'s place in international football, their path to 2030, and which players or clubs connect to them.`} />
         </div>

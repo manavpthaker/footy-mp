@@ -71,3 +71,73 @@ WC26 built team strength from FIFA points + goals. footy-mp uses **real expected
 home advantage, and player-availability adjustments — plus the ET/penalty cascade and
 nerves factor that backtested well. Every model change is validated by walk-forward
 RPS / log-loss / Brier before it ships.
+
+## Follow football through connections
+
+The home screen starts from a club or national team, with Bayern as the initial
+example when followed. Switch among followed teams or open `/?team=ID` from any
+team page. Player cards connect current clubs, countries and verified career
+history; country links lead to players at other clubs. League and cup links
+explain why those clubs meet. Results, standings and schedules sit behind an
+optional catch-up section. The wider football feed remains at `/world`.
+
+Bayern recognition examples (Kane, Díaz, Olise and Musiala) cite the club's own
+career profiles. Current club rosters are checked against ESPN when available;
+stored player pools are labelled when a current roster cannot be checked.
+Nationality is not proof of a current call-up. Other-country club connections
+can lag transfers, and individual player statistics may be incomplete.
+Tables are calculated from loaded results, not official standings.
+
+Scheduled kickoff times are checked against ESPN's `timeValid`; failed or
+conflicting confirmation is explicit. The October 6 Colombia–Peru time remains
+unverified because ESPN and the September 17 federation announcement disagree.
+
+### Recover a stale fixture feed
+
+ESPN rejected the old custom User-Agent. The standard Python client works in the
+verified run; scoreboard failures now fail the ingest job instead of becoming
+empty matchdays. An ESPN-only mode refreshes results without depending on xG or
+AI providers. Export the usual Supabase credentials first, then run:
+
+```bash
+PIPELINE_DAYS_BACK=50 PIPELINE_DAYS_FORWARD=21 python -m data.pipeline fixtures
+# Optional: PIPELINE_ESPN_LEAGUES='Bundesliga,Serie A,Saudi Pro League,Int. Friendlies'
+```
+
+Backfill to the beginning of the relevant season before treating a calculated
+table as complete. The September 19 recovery covered July 31–October 10 for
+Bundesliga, Serie A, Primeira Liga, Colombia, Saudi Arabia, Argentina, Premier
+League, Champions League and international friendlies. Calendar-year leagues
+may still have earlier gaps. This data refresh is separate from deploying code
+and from refreshing individual player statistics or every squad's club links.
+
+Verification:
+
+```bash
+python -m unittest discover -s data/tests -v
+cd web
+node --experimental-strip-types --test tests/*.test.mjs # Node 22.6+
+npm run lint
+npm run build
+```
+
+## Add a chat key from your phone
+
+The private local preview has a `/settings` screen (gear button) for an OpenAI
+API key. It checks model access before saving, then takes effect on the next
+chat request. Claude keys are not supported. No credential is returned by the
+settings API or stored in browser storage.
+
+Enable only on a loopback-bound Mac preview behind private Tailscale Serve:
+
+```sh
+cd web
+FOOTY_LOCAL_SETTINGS=1 FOOTY_LOCAL_SETTINGS_ORIGIN=https://macbook.tail1c89f5.ts.net npm run start -- -p 3001 -H 127.0.0.1
+```
+
+Keys are saved outside the repository at
+`~/Library/Application Support/footy-mp/chat.json`, with owner-only file
+permissions. Removing the saved key falls back to `OPENAI_API_KEY` if configured.
+Local key writes are disabled by default and on Vercel. `OPENAI_CHAT_MODEL` still
+selects the model (default `gpt-5-mini`). The key check verifies authentication
+and model access, not whether API billing has credit for a chat request.

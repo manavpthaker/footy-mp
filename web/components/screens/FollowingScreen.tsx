@@ -11,7 +11,7 @@ import { FollowToggle } from "@/components/mobile/FollowToggle";
 import { AskAbout } from "@/components/search/AskAbout";
 import {
   loadFollowedEntities, countriesByIds, teamsByIds, leaguesByIds,
-  upcomingForTeams, recentMovements,
+  upcomingForTeams, recentMovements, nationalTeamForCountry,
 } from "@/lib/data";
 import { flagFor } from "@/lib/format";
 
@@ -27,7 +27,12 @@ export const dynamic = "force-dynamic";
 export default async function FollowingPage() {
   const { players, teams, leagues, countries } = await loadFollowedEntities();
 
-  const followedTeamIds = teams.map(t => t.id);
+  const nationalTeams = await Promise.all(countries.map(c => nationalTeamForCountry(c.id)));
+  const followedTeamIds = Array.from(new Set([
+    ...teams.map(t => t.id),
+    ...players.map(p => p.team_id).filter((id): id is number => id != null),
+    ...nationalTeams.filter((t): t is NonNullable<typeof t> => t != null).map(t => t.id),
+  ]));
   const [playerCountries, playerClubs, teamLeagues, nextUp, movements] = await Promise.all([
     countriesByIds(players.map(p => p.country_id).filter((x): x is number => x != null)),
     teamsByIds(players.map(p => p.team_id)),
@@ -48,6 +53,12 @@ export default async function FollowingPage() {
   return (
     <div>
       <Pad style={{ paddingTop: 12 }}>
+        <h1 style={{ fontSize: 24, margin: "6px 0" }}>Follow the connections you care about.</h1>
+        <p className="circle-small">Start with any club, country or player. Following a player brings their club’s games into your schedule automatically.</p>
+        <div className="circle-footer" style={{ marginBottom: 18 }}>
+          <Link className="circle-link" href="/">Explore the connections →</Link>
+          {countries.map(c => <Link className="circle-link" key={c.id} href={`/countries/${c.id}`}>Choose players from {c.name} →</Link>)}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
           <StatCard label="players" value={players.length}
             accent={players.length > 0 ? "var(--follow)" : "var(--text-faint)"} />
@@ -155,8 +166,7 @@ export default async function FollowingPage() {
             <div style={{ fontSize: 26, marginBottom: 8 }}>★</div>
             <div style={{ fontWeight: 700, fontSize: "var(--fs-h2)", marginBottom: 7 }}>Build your football world</div>
             <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.6, marginBottom: 14 }}>
-              Start with one country, one club and one competition. Follow stars add their
-              fixtures, transfers and news here without making you track everything.
+              Start with a team you’re watching, then follow the players who interest you. Their club games come with them.
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
               <Link href="/tables" style={pillStyle}>Choose a competition</Link>

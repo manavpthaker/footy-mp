@@ -36,7 +36,7 @@ export function FixtureItem({
         : <>
             <span>{kick.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
             <br />
-            <span>{kick.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
+            <span>{m.kickoff_confirmed === true ? kick.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : m.kickoff_confirmed === false ? "Time TBC" : "Time unverified"}</span>
           </>}
       {showComp && m.league && (
         <>

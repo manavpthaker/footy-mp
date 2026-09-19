@@ -129,6 +129,7 @@ export function SearchChat({
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px 24px" }}>
         <div style={{ maxWidth: 600, margin: "0 auto" }}>
 
+          <button onClick={() => go("/settings")} className="circle-link" style={{ background: "none", border: 0, padding: "10px 0 18px", cursor: "pointer" }}>Chat settings →</button>
           {hasResults && (
             <>
               {results.teams.length > 0 && <Group label="Teams">

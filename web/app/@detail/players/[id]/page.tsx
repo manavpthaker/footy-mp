@@ -14,6 +14,7 @@ import { newsForPlayer } from "@/lib/news";
 import { NewsList } from "@/components/ds/NewsList";
 import { Crest } from "@/components/ds/Crest";
 import { flagFor, competitionCode } from "@/lib/format";
+import { RECOGNITION } from "@/lib/recognition";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default async function PlayerDetail({ params }: { params: { id: string } 
         right={<FollowToggle entityType="player" entityId={id} initialFollowed={followed} />}
       />
       <Pad style={{ paddingTop: 14 }}>
+        {RECOGNITION[player.name] && <div className="circle-note"><strong>Where you may recognise them from</strong><p>{RECOGNITION[player.name].note}</p><a className="circle-link" href={RECOGNITION[player.name].source} target="_blank" rel="noreferrer">Verified career history ↗</a></div>}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 9,
           borderBottom: "1px solid var(--border)", paddingBottom: 12, marginBottom: 12,
@@ -77,6 +79,8 @@ export default async function PlayerDetail({ params }: { params: { id: string } 
           </Link>
         )}
 
+        {country && <p className="circle-small"><Link className="circle-link" href={`/countries/${country.id}`}>{flagFor(country.name, country.fifa_code)} Back to {country.name}’s player pool →</Link><br />Club performances and national-team selection are separate. Check the latest call-up before assuming a player will appear.</p>}
+
         {worldCup && (
           <>
             <SectionHeading tick="var(--gold)">World Cup 2026</SectionHeading>
@@ -89,8 +93,7 @@ export default async function PlayerDetail({ params }: { params: { id: string } 
           <AggGrid agg={season} lead />
         ) : (
           <div style={{ ...eyebrow, padding: "4px 2px 8px" }}>
-            no league match data for this player yet — big-5 club players fill in
-            as the Understat player backfill lands
+            Individual match stats aren’t available for this player this season. Club results do not tell us whether they played.
           </div>
         )}
 

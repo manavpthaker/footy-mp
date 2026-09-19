@@ -66,6 +66,10 @@ export default async function MatchDetail({ params }: { params: { id: string } }
         title={`${home ? shortNameFor(home.name) : "TBD"} v ${away ? shortNameFor(away.name) : "TBD"}`}
       />
       <Pad style={{ paddingTop: 14 }}>
+        <div className="circle-footer" style={{ marginTop: 0, marginBottom: 12 }}>
+          <Link className="circle-link" href={`/?team=${m.home_team_id}`}>Recognise {home?.name ?? "the home team"}’s players →</Link>
+          <Link className="circle-link" href={`/?team=${m.away_team_id}`}>Recognise {away?.name ?? "the away team"}’s players →</Link>
+        </div>
        <div className="">
         <div>
         <div style={{
@@ -92,7 +96,7 @@ export default async function MatchDetail({ params }: { params: { id: string } }
                 : isFinal ? "FULL TIME"
                 : kick.toLocaleDateString(undefined, {
                     weekday: "short", month: "short", day: "numeric",
-                  }) + " · " + kick.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  }) + " · " + (m.kickoff_confirmed === true ? kick.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" }) : m.kickoff_confirmed === false ? "Time to be confirmed" : "Kickoff time unverified")}
             </div>
           </div>
           <TeamCell team={away} id={m.away_team_id} />

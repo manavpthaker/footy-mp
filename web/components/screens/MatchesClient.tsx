@@ -19,7 +19,7 @@ export function MatchesClient({
 }) {
   const [mode, setMode] = React.useState<"upcoming" | "results">(upcoming.length ? "upcoming" : "results");
   const [comp, setComp] = React.useState("all");
-  const [onlyFollowed, setOnlyFollowed] = React.useState(false);
+  const [onlyFollowed, setOnlyFollowed] = React.useState(initialFollowed.length > 0);
   const followedSet = React.useMemo(() => new Set(initialFollowed), [initialFollowed]);
 
   // competitions that actually have matches in view — the rail adapts as
@@ -37,7 +37,7 @@ export function MatchesClient({
 
   const filtered = source.filter(m => {
     if (comp !== "all" && m.league?.name !== comp) return false;
-    if (onlyFollowed && !isFollowed(m, followedSet) && m.status !== "live") return false;
+    if (onlyFollowed && !isFollowed(m, followedSet)) return false;
     return true;
   });
 
@@ -48,7 +48,7 @@ export function MatchesClient({
       <Pad style={{ paddingTop: 12, paddingBottom: 10 }}>
         <div style={{ ...eyebrow, color: "var(--accent)" }}>Calendar and results</div>
         <h1 style={{ margin: "5px 0 11px", fontSize: 23, lineHeight: 1.2, letterSpacing: 0 }}>
-          Follow the games, then open the story.
+          Your teams and your players’ clubs.
         </h1>
         {upcoming.length === 0 && results.length > 0 && (
           <div role="status" style={{

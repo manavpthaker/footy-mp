@@ -146,3 +146,37 @@ body { overflow-x: hidden; }
   from { background-position: 120% 0; }
   to   { background-position: -80% 0; }
 }
+
+/* A small country -> player -> club circle, with detail on demand. */
+.circle-intro h1 { font-size: clamp(25px, 4vw, 32px); line-height: 1.15; margin: 8px 0 12px; letter-spacing: -.025em; }
+.circle-intro p, .circle-player p, .circle-talk p, .circle-note p { color: var(--text-muted); font-size: 14px; line-height: 1.65; }
+.circle-kicker { color: var(--gold); font-size: 11px; font-weight: 700; letter-spacing: .045em; }
+.circle-path { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 0; color: var(--accent-2); font-size: 14px; font-weight: 700; }
+.circle-small { color: var(--text-muted); font-size: 12px !important; line-height: 1.6; }
+.circle-section { border-top: 1px solid var(--border); padding-top: 22px; margin-top: 24px; scroll-margin-top: 80px; }
+.circle-section h2, .circle-talk h2 { margin: 5px 0 14px; font-size: 21px; line-height: 1.25; letter-spacing: -.015em; }
+.circle-game, .circle-player, .circle-note { display: block; background: var(--surface-panel); border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin-bottom: 10px; }
+.circle-game { display: grid; gap: 6px; }
+.circle-game strong { font-size: 16px; }
+.circle-game:hover, .circle-player:focus-within { border-color: var(--accent-2); }
+.circle-note { border-left: 3px solid var(--gold); }
+.circle-note p { margin: 7px 0; font-size: 13px; }
+.circle-link { font-size: 12px; color: var(--accent-2); font-weight: 600; line-height: 1.6; }
+.circle-player-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.circle-player-head h3 { margin: 4px 0; font-size: 18px; line-height: 1.3; }
+.circle-club { padding: 10px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.circle-details { margin: 15px 0; }
+.circle-details summary { cursor: pointer; color: var(--accent-2); font-size: 13px; padding: 9px 0; }
+.circle-empty { font-size: 14px; line-height: 1.6; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 10px; padding: 14px; }
+.circle-warning { color: var(--gold); font-size: 12px; }
+.circle-talk { background: var(--surface-tint); border-radius: 12px; padding: 18px; margin-top: 24px; }
+.circle-footer { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 20px; color: var(--text-muted); font-size: 12px; }
+.circle-section a:focus-visible, .circle-intro a:focus-visible, .circle-details summary:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 4px; }
+.connection-choices { display: flex; flex-wrap: wrap; gap: 7px; margin: 16px 0 12px; }
+.connection-choice { border: 1px solid var(--border); border-radius: 20px; padding: 8px 11px; font-size: 12px; color: var(--text-muted); }
+.connection-choice.selected { color: var(--gold); border-color: var(--gold); background: var(--surface-tint); }
+.connection-player-map { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 10px; }
+.connection-player-map > a { padding: 10px; background: var(--surface-tint); border-radius: 8px; display: grid; gap: 4px; }
+.connection-player-map span { font-size: 11px; color: var(--text-muted); }
+.connection-player-map strong { font-size: 14px; color: var(--accent-2); }
+.connection-branch { display: grid; gap: 2px; border-top: 1px solid var(--border); padding: 9px 0; }

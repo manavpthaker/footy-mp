@@ -21,10 +21,13 @@ export function RefreshButton() {
       const res = await fetch("/api/refresh", { method: "POST" });
       const body = await res.json().catch(() => ({}));
       router.refresh();
-      setFlash(body?.updated > 0 ? `${body.updated} updated` : "up to date");
+      setFlash(!res.ok || body?.ok === false ? "refresh failed"
+        : body?.throttled ? "checked recently"
+        : body?.idle ? "no games to check"
+        : body?.updated > 0 ? `${body.updated} updated` : "no updates found");
     } catch {
       router.refresh(); // still repaint from the DB even if ESPN pull failed
-      setFlash("refreshed");
+      setFlash("refresh failed");
     } finally {
       setBusy(false);
       setTimeout(() => setFlash(null), 2500);

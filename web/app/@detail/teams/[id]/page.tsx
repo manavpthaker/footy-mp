@@ -62,6 +62,7 @@ export default async function TeamDetail({ params }: { params: { id: string } })
         right={<FollowToggle entityType="team" entityId={id} initialFollowed={followed} />}
       />
       <Pad style={{ paddingTop: 12 }}>
+        <Link className="circle-game" href={`/?team=${id}`}><strong>Who are these players? →</strong><span className="circle-small">Their countries, previous clubs, and the teams they connect you to.</span></Link>
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 9,
           borderBottom: "1px solid var(--border)", paddingBottom: 12,

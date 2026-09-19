@@ -110,6 +110,8 @@ LEAGUES: dict[str, League] = {L.name: L for L in [
     League("Primeira Liga",  "por.1"),
     League("Eredivisie",     "ned.1"),
     League("MLS",            "usa.1", season_style="calendar"),
+    League("Saudi Pro League", "ksa.1"),                       # Richard Ríos' club
+    League("Argentine Primera División", "arg.1", season_style="calendar"),
     League("Liga MX",        "mex.1", season_style="calendar"),
     League("Categoría Primera A", "col.1", season_style="calendar"),
     # ---- club cups (how leagues connect across borders) ----

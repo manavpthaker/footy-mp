@@ -90,6 +90,7 @@ export function AppHeader() {
           fontSize: 14, lineHeight: 1, padding: "7px 10px", cursor: "pointer",
           marginRight: 8,
         }}>⌕</button>
+        <Link href="/settings" aria-label="Chat settings" style={{ color: "var(--text-muted)", padding: "8px", fontSize: 18 }}>⚙</Link>
         <RefreshButton />
         <div className="fmp-desktop-only" style={{
           fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",

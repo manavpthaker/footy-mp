@@ -22,7 +22,8 @@ CORE = "https://sports.core.api.espn.com/v2/sports/soccer"
 
 
 def _get(url: str) -> dict:
-    req = urllib.request.Request(url, headers={"User-Agent": "footy-mp/1.0"})
+    # ESPN rejects the old custom agent; urllib's standard client works.
+    req = urllib.request.Request(url)
     with urllib.request.urlopen(req, timeout=20) as r:
         return json.loads(r.read().decode())
 
@@ -34,7 +35,7 @@ def fetch_day(slug: str, yyyymmdd: str) -> list[dict]:
         data = _get(url)
     except Exception as e:
         print(f"[espn] {slug} {yyyymmdd} error: {e}")
-        return []
+        raise RuntimeError(f"ESPN scoreboard unavailable: {slug} {yyyymmdd}") from e
     out = []
     for ev in data.get("events", []):
         comp = ev["competitions"][0]

@@ -24,7 +24,7 @@ on:
         description: "Pipeline mode"
         type: choice
         default: daily
-        options: [daily, live, backfill, seed, model, backtest, players, lowdown, rosters, seasons]
+        options: [daily, fixtures, live, backfill, seed, model, backtest, players, lowdown, rosters, seasons]
       backfill_seasons:
         description: "Understat season codes for backfill mode (comma-separated)"
         required: false

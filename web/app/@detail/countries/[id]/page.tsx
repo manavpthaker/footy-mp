@@ -10,7 +10,7 @@ import { FollowToggle } from "@/components/mobile/FollowToggle";
 import { AskAbout } from "@/components/search/AskAbout";
 import {
   getCountry, listFollows, nationalTeamForCountry, leaguesForCountry,
-  upcomingForTeams, recentResultsForTeams, squadByClub,
+  upcomingForTeams, recentResultsForTeams, squadByClub, currentRosterForTeam,
 } from "@/lib/data";
 import { flagFor } from "@/lib/format";
 
@@ -34,6 +34,7 @@ export default async function CountryDetail({ params }: { params: { id: string }
   const [upcoming, results] = team
     ? await Promise.all([upcomingForTeams([team.id], 6), recentResultsForTeams([team.id], 6)])
     : [[], []];
+  const roster = team ? await currentRosterForTeam(team.id) : null;
   const followed = follows.some(f => f.entity_type === "country" && f.entity_id === id);
   const followedTeamIds = new Set(team ? [team.id] : []);
 
@@ -51,10 +52,11 @@ export default async function CountryDetail({ params }: { params: { id: string }
           borderBottom: "1px solid var(--border)", paddingBottom: 12, marginBottom: 12,
         }}>
           <div style={{ color: "var(--text-muted)", fontSize: "var(--fs-sm)", lineHeight: 1.55, flex: "1 1 260px" }}>
-            Start with a few players, then follow their clubs between international games. This is the stored player pool, not a confirmed current call-up list; some club links may lag transfers.
+            Start with a few players, then follow their clubs between international games. {roster && roster.names.size < 11 ? "ESPN has only a partial player list for this country. " : roster ? "Showing players matched to ESPN’s national-team player list. This is not a confirmed call-up list for the next match." : "The latest roster could not be checked. Showing country connections, which can include former internationals."}
           </div>
           <AskAbout question={`Explain ${country.name}'s place in international football, their path to 2030, and which players or clubs connect to them.`} />
         </div>
+        {roster && <p className="circle-small"><a href={roster.sourceUrl} target="_blank" rel="noreferrer">ESPN roster ↗</a>{roster.checkedAt ? ` · Checked ${new Date(roster.checkedAt).toLocaleDateString("en-US", { timeZone: "America/New_York" })}` : ""}</p>}
         {team && (
           <Link href={`/teams/${team.id}`} style={{
             display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit",

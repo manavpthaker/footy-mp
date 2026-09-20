@@ -8,7 +8,7 @@ import type { RichMatch } from "@/lib/data";
 
 // chips lead with the marquee competitions, then whatever else has fixtures
 const COMP_PRIORITY = [
-  "World Cup", "Champions League", "Premier League", "La Liga", "Serie A",
+  "MLS", "Int. Friendlies", "UEFA Nations League", "World Cup", "Champions League", "Premier League", "La Liga", "Serie A",
   "Bundesliga", "Ligue 1", "Europa League",
 ];
 
@@ -66,7 +66,7 @@ export function MatchesClient({
         <Chip active={onlyFollowed} onClick={() => setOnlyFollowed(!onlyFollowed)}>★ Following</Chip>
         <span style={{ width: 1, background: "var(--border)", margin: "2px 2px", flex: "0 0 auto" }} />
         {compOptions.map(o => (
-          <Chip key={o.id} active={comp === o.id} onClick={() => setComp(o.id)}>{o.label}</Chip>
+          <Chip key={o.id} active={comp === o.id} onClick={() => { setComp(o.id); if (o.id !== "all") setOnlyFollowed(false); }}>{o.label}</Chip>
         ))}
       </ChipRail>
       <Pad style={{ paddingTop: 10 }}>

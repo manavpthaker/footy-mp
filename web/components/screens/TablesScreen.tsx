@@ -16,6 +16,10 @@ export default async function TablesPage() {
       leagueName: x.league!.name,
       season: x.season,
       complete: x.complete,
+      groups: x.groups,
+      source: x.source,
+      sourceUrl: x.sourceUrl,
+      checkedAt: x.checkedAt,
       rows: x.rows.map(r => ({ ...r, flag: flagFor(r.team) })),
     }));
   return (

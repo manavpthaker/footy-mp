@@ -29,6 +29,7 @@ export default async function TodayScreen({ searchParams }: { searchParams?: { t
         {data.choices.map(t => <Link key={t.id} href={`/?team=${t.id}`} aria-current={t.id === team.id ? "page" : undefined} className={t.id === team.id ? "connection-choice selected" : "connection-choice"}>{t.name}</Link>)}
       </div>
       <FindConnection />
+      <Link className="circle-link" href="/explore">Explore MLS and national teams →</Link>
     </section>
 
     <section className="circle-section" aria-labelledby="team-context">
@@ -40,7 +41,7 @@ export default async function TodayScreen({ searchParams }: { searchParams?: { t
       <details className="circle-details"><summary>Latest result, next game and standings</summary>
       {results[0] && <Game match={results[0]} label="Last result" />}
       {upcoming[0] ? <Game match={upcoming[0]} label="Next game" /> : <p className="circle-empty">The next game is not loaded yet.</p>}
-      {position && <p className="circle-small"><Link className="circle-link" href={`/leagues/${table!.league!.id}`}>#{position.pos} of {table!.rows.length} in the loaded table · {position.Pts} points from {position.P} games →</Link><br />{table!.season} · Based on available results; coverage may be incomplete.</p>}
+      {position && <p className="circle-small"><Link className="circle-link" href={`/leagues/${table!.league!.id}`}>#{position.pos}{position.group ? ` · ${position.group}` : ""} · {position.Pts} points from {position.P} games →</Link><br />{table!.season} · {table!.source === "ESPN" ? "ESPN source standings" : "Based on available results; coverage may be incomplete."}</p>}
       <details className="circle-details"><summary>More results and dates</summary>
         {upcoming.slice(1, 4).map(m => <Game key={m.id} match={m} label="Coming up" />)}
         {results.slice(1, 4).map(m => <Game key={m.id} match={m} label="Recent result" />)}
@@ -51,7 +52,7 @@ export default async function TodayScreen({ searchParams }: { searchParams?: { t
     <section className="circle-section" aria-labelledby="recognise-players">
       <div className="circle-kicker">Put a story to the face</div>
       <h2 id="recognise-players">Where do I know them from?</h2>
-      <p className="circle-small">{data.rosterChecked ? "Matched to the current club roster. " : "Some player and club links may be out of date. "}Country connections can include past internationals; they don’t guarantee a current call-up.</p>
+      <p className="circle-small">{data.rosterPartial ? "ESPN has only a partial player list for this team. " : data.rosterChecked ? "Matched to ESPN’s team player list. " : "Some player and club links may be out of date. "}Country connections can include past internationals; they don’t guarantee a current call-up.</p>
       {players.slice(0, 4).map(p => <RecognitionCard key={p.id} player={p} data={data} />)}
       {players.length > 4 && <details className="circle-details"><summary>Explore {players.length - 4} more players</summary>
         {players.slice(4).map(p => <RecognitionCard key={p.id} player={p} data={data} />)}

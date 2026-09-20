@@ -2,11 +2,9 @@ import { cache } from "react";
 import { server, type Player, type Team } from "./supabase";
 import { loadFollowedEntities, teamsByIds, nationalTeamForCountry, getTeam,
   playersOnTeam, squadByClub, countriesByIds, upcomingForTeams,
-  recentResultsForTeams, standingsForLeague, leaguesByIds } from "./data";
+  recentResultsForTeams, standingsForLeague, leaguesByIds, currentRosterForTeam } from "./data";
 import { RECOGNITION } from "./recognition";
-
-const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-type Roster = { athletes?: Array<{ displayName?: string; position?: { abbreviation?: string } }> };
+import { foldPlayerName } from "./source-roster";
 
 export const loadConnections = cache(async (requestedId?: number) => {
   const s = await server();
@@ -40,26 +38,9 @@ export const loadConnections = cache(async (requestedId?: number) => {
     team.league_id && !team.is_national ? standingsForLeague(team.league_id) : Promise.resolve(null),
   ]);
   let players: Player[] = team.is_national ? countryGroups.flatMap(g => g.players) : storedPlayers;
-  let rosterChecked = false;
-  // Only use exact source names. A stale database alias must not create a
-  // second player or suggest someone who is absent from the current roster.
-  if (!team.is_national && team.espn_id && table?.league?.espn_slug) {
-    try {
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${encodeURIComponent(table.league.espn_slug)}/teams/${encodeURIComponent(team.espn_id)}/roster`, {
-        next: { revalidate: 3600 }, signal: AbortSignal.timeout(4000),
-      });
-      if (res.ok) {
-        const roster: Roster = await res.json();
-        if (roster.athletes?.length) {
-          const byName = new Map(roster.athletes.filter(a => a.displayName).map(a => [fold(a.displayName!), a]));
-          players = players.filter(p => byName.has(fold(p.name))).map(p => ({
-            ...p, position: byName.get(fold(p.name))?.position?.abbreviation ?? p.position,
-          }));
-          rosterChecked = true;
-        }
-      }
-    } catch { /* Stored roster is explicitly labelled below. */ }
-  }
+  const roster = await currentRosterForTeam(team.id);
+  const rosterChecked = !!roster;
+  if (roster) players = players.filter(p => roster.names.has(foldPlayerName(p.name)));
   const followedPlayerIds = new Set(followed.players.map(p => p.id));
   const priority = ["Luis Díaz", "Harry Kane", "Michael Olise", "Jamal Musiala"];
   players.sort((a, b) => {
@@ -91,7 +72,7 @@ export const loadConnections = cache(async (requestedId?: number) => {
     return [{ country, here: visiblePlayers.filter(p => p.country_id === cid), clubs: Array.from(clubGroups.values())
       .sort((a, b) => Number(choices.some(t => t.id === b.club.id)) - Number(choices.some(t => t.id === a.club.id)) || b.players.length - a.players.length).slice(0, 2) }];
   });
-  return { team, choices, players, countries, clubs, branches, competitions, table, rosterChecked,
+  return { team, choices, players, countries, clubs, branches, competitions, table, rosterChecked, rosterPartial: !!roster && roster.names.size < 11, rosterCheckedAt: roster?.checkedAt,
     upcoming: upcoming.filter(m => m.status === "live" || +new Date(m.kickoff_utc) >= Date.now()), results,
     previousClubs: (previousClubsRes.data ?? []) as Team[], followedPlayerIds,
     followedCountryIds: new Set(followed.countries.map(c => c.id)),

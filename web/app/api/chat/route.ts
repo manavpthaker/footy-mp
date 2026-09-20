@@ -111,9 +111,9 @@ function buildTools() {
       run: async (input: any) => {
         const s = await standingsForLeague(Number(input.league_id));
         return j({
-          league: s.league?.name, season: s.season, season_complete: s.complete,
+          league: s.league?.name, season: s.season, season_complete: s.complete, source: s.source, source_url: s.sourceUrl, checked_at: s.checkedAt,
           rows: s.rows.map(r => ({
-            pos: r.pos, team: r.team, P: r.P, W: r.W, D: r.D, L: r.L,
+            pos: r.pos, group: r.group, qualification: r.qualification, team: r.team, P: r.P, W: r.W, D: r.D, L: r.L,
             GD: r.GD, Pts: r.Pts, form: r.form.join(""), zone: r.zone,
           })),
         });
@@ -121,7 +121,7 @@ function buildTools() {
     }),
     functionTool({
       name: "list_leagues",
-      description: "List the domestic leagues that have standings available.",
+      description: "List leagues and national-team competitions with standings. Groups and conferences are separate tables.",
       inputSchema: {
         type: "object", properties: {}, required: [], additionalProperties: false,
       } as const,

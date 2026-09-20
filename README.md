@@ -86,7 +86,7 @@ career profiles. Current club rosters are checked against ESPN when available;
 stored player pools are labelled when a current roster cannot be checked.
 Nationality is not proof of a current call-up. Other-country club connections
 can lag transfers, and individual player statistics may be incomplete.
-Tables are calculated from loaded results, not official standings.
+Standings prefer ESPN source tables, preserving conference/group boundaries, points deductions, and source tie-break order. If a domestic source table is unavailable, a labelled calculation from loaded results is shown. National competitions do not fall back to a fabricated combined table.
 
 Scheduled kickoff times are checked against ESPN's `timeValid`; failed or
 conflicting confirmation is explicit. The October 6 Colombia–Peru time remains
@@ -104,12 +104,32 @@ PIPELINE_DAYS_BACK=50 PIPELINE_DAYS_FORWARD=21 python -m data.pipeline fixtures
 # Optional: PIPELINE_ESPN_LEAGUES='Bundesliga,Serie A,Saudi Pro League,Int. Friendlies'
 ```
 
-Backfill to the beginning of the relevant season before treating a calculated
-table as complete. The September 19 recovery covered July 31–October 10 for
-Bundesliga, Serie A, Primeira Liga, Colombia, Saudi Arabia, Argentina, Premier
-League, Champions League and international friendlies. Calendar-year leagues
-may still have earlier gaps. This data refresh is separate from deploying code
-and from refreshing individual player statistics or every squad's club links.
+### Refresh all published schedules and player clubs
+
+```bash
+python -m data.pipeline refresh
+# To refresh club/national player lists without calendars:
+PIPELINE_REFRESH_ROSTERS_ONLY=1 python -m data.pipeline refresh
+```
+
+`refresh` reads the current and next calendar year for every tracked competition,
+then current domestic club catalogues/rosters and national-team player lists.
+MLS is included. Only published fixtures are available; a future season or
+knockout opponent may not have been announced. Truncated calendars and provider
+errors fail the run, while unpublished national rosters are listed separately.
+The JSON report at `/tmp/footy-refresh-report.json` records coverage and gaps.
+
+A separate 05:30 UTC daily job runs this refresh independently of Understat,
+model, or AI failures and retains its report in Actions for 14 days. Existing
+15-minute score updates remain. `/explore` provides MLS clubs and national
+teams; `/tables` presents MLS conferences and national competition groups.
+
+Club and country links are reconciled conservatively by name and compatible
+birth date. Ambiguous identities are reported rather than merged. A club roster
+entry whose source default club has changed is excluded so it cannot move a
+player back after a transfer. National source lists can cover a player pool,
+not a confirmed squad for the next game. Individual xG/stat backfills still
+use the separate `players` pipeline.
 
 Verification:
 

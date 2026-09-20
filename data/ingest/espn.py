@@ -30,12 +30,16 @@ def _get(url: str) -> dict:
 
 def fetch_day(slug: str, yyyymmdd: str) -> list[dict]:
     """All matches for a league on a date. Normalized."""
-    url = f"{BASE}/{slug}/scoreboard?dates={yyyymmdd}"
+    # ESPN supports a calendar year as well as a day. A high limit prevents
+    # a year refresh from silently returning only the first matchdays.
+    url = f"{BASE}/{slug}/scoreboard?dates={yyyymmdd}&limit=1000"
     try:
         data = _get(url)
     except Exception as e:
         print(f"[espn] {slug} {yyyymmdd} error: {e}")
         raise RuntimeError(f"ESPN scoreboard unavailable: {slug} {yyyymmdd}") from e
+    if len(data.get("events", [])) >= 1000:
+        raise RuntimeError(f"ESPN scoreboard may be truncated: {slug}/{yyyymmdd}")
     out = []
     for ev in data.get("events", []):
         comp = ev["competitions"][0]
@@ -95,7 +99,7 @@ def _ref_id(obj) -> str | None:
     return tail or None
 
 
-def fetch_roster(slug: str, team_espn_id: str) -> list[dict]:
+def fetch_roster(slug: str, team_espn_id: str, *, strict: bool = False) -> list[dict]:
     """Current squad for a (national) team under a competition slug.
     Gives citizenship + date of birth + the player's CLUB (defaultTeam) — the
     raw material for the club↔country web."""
@@ -104,17 +108,21 @@ def fetch_roster(slug: str, team_espn_id: str) -> list[dict]:
         data = _get(url)
     except Exception as e:
         print(f"[espn] roster {slug}/{team_espn_id} error: {e}")
+        if strict:
+            raise RuntimeError(f"Roster unavailable: {slug}/{team_espn_id}") from e
         return []
     out = []
     for a in data.get("athletes", []):
         pos = ((a.get("position") or {}).get("abbreviation") or "")[:1]
         headshot = a.get("headshot")
         out.append({
+            "espn_id": str(a.get("id") or ""),
             "name": a.get("displayName") or a.get("fullName"),
             "position": _POS_MAP.get(pos),
             "jersey": a.get("jersey"),
             "dob": (a.get("dateOfBirth") or "")[:10] or None,
             "citizenship": a.get("citizenship"),
+            "country_code": (a.get("citizenshipCountry") or {}).get("abbreviation"),
             "club_espn_id": _ref_id(a.get("defaultTeam")),
             "club_league_slug": _ref_id(a.get("defaultLeague")),
             "photo_url": (headshot or {}).get("href") if isinstance(headshot, dict) else None,

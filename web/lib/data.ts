@@ -6,6 +6,8 @@
 import { server, Team, Player, League, Country, Match, Movement, Prediction, Follow, ModelRating, EntityType } from "./supabase";
 import { normalizeSeason } from "./seasons";
 import { withKickoffConfidence } from "./kickoff";
+import { sourceStandings } from "./source-standings";
+import { sourceRoster, matchRosterPlayers } from "./source-roster";
 
 export const USER_ID = "mp";
 export const MODEL_VERSION = "footy-mp-v2";
@@ -89,10 +91,23 @@ export async function fixturesForLeague(leagueId: number, days = 14): Promise<Ri
     .from("matches")
     .select("*")
     .eq("league_id", leagueId)
+    .in("status", ["scheduled", "live"])
     .gte("kickoff_utc", start)
     .lte("kickoff_utc", end)
     .order("kickoff_utc", { ascending: true });
-  return enrich((data ?? []) as Match[]);
+  return withKickoffConfidence(await enrich((data ?? []) as Match[]));
+}
+
+/** Keep MLS and international windows visible even on crowded club weekends. */
+export async function priorityUpcoming(): Promise<RichMatch[]> {
+  const s = await server();
+  const { data: leagues } = await s.from("leagues").select("id").in("espn_slug", ["usa.1", "fifa.friendly", "uefa.nations"]);
+  const lists = await Promise.all((leagues ?? []).map(async l => {
+    const { data } = await s.from("matches").select("*").eq("league_id", l.id)
+      .in("status", ["scheduled", "live"]).gte("kickoff_utc", new Date().toISOString()).order("kickoff_utc").limit(40);
+    return (data ?? []) as Match[];
+  }));
+  return withKickoffConfidence(await enrich(lists.flat()));
 }
 
 export async function resultsForLeague(leagueId: number, limit = 20): Promise<RichMatch[]> {
@@ -218,8 +233,21 @@ export async function teamsInLeague(leagueId: number): Promise<Team[]> {
 
 export async function playersOnTeam(teamId: number): Promise<Player[]> {
   const s = await server();
-  const { data } = await s.from("players").select("*").eq("team_id", teamId).order("name");
-  return (data ?? []) as Player[];
+  const team = await getTeam(teamId);
+  const [result, roster] = await Promise.all([
+    s.from("players").select("*").eq(team?.is_national ? "country_id" : "team_id", team?.is_national ? team.country_id : teamId).order("name"),
+    currentRosterForTeam(teamId),
+  ]);
+  const players = (result.data ?? []) as Player[];
+  return roster ? matchRosterPlayers(players, roster.names) : players;
+}
+
+export async function currentRosterForTeam(teamId: number) {
+  const team = await getTeam(teamId);
+  if (!team?.espn_id) return null;
+  const league = team.league_id ? await getLeague(team.league_id) : null;
+  const slug = team.is_national ? "fifa.friendly" : league?.espn_slug;
+  return slug ? sourceRoster(team.espn_id, slug, team.is_national) : null;
 }
 
 // ---------- Extended queries for the mobile app ----------
@@ -289,6 +317,8 @@ export async function formLast5(teamId: number): Promise<Array<"W" | "D" | "L">>
 
 /** Everything for the League table screen: standings + fixtures/results. */
 export interface LeagueTableRow {
+  group?: string;
+  qualification?: string;
   team: string;
   teamId: number;
   flag: string;
@@ -313,13 +343,46 @@ export async function standingsForLeague(leagueId: number): Promise<{
   league: League | null; rows: LeagueTableRow[];
   /** season label the table covers ('2025-26' / '2026') */
   season: string | null;
-  /** true once the season has no scheduled matches left — the table is FINAL
-   *  standings, not a live race */
+  /** True only when the provider season end date has passed. */
   complete: boolean;
+  groups?: { name: string; rows: LeagueTableRow[] }[];
+  source?: "ESPN" | "results";
+  sourceUrl?: string;
+  checkedAt?: string | null;
 }> {
   const league = await getLeague(leagueId);
   if (!league) return { league: null, rows: [], season: null, complete: false };
   const s = await server();
+  // Provider tables preserve official points, tie breakers, conferences and
+  // tournament groups. Missing schedule rows do not imply a season is final.
+  const published = league.espn_slug && league.format !== "friendly" ? await sourceStandings(league.espn_slug) : null;
+  if (published) {
+    const espnIds = Array.from(new Set(published.groups.flatMap(g => g.entries.map(e => String(e.team.id)))));
+    const [teamsResult, followsResult] = await Promise.all([
+      s.from("teams").select("*").in("espn_id", espnIds),
+      s.from("follows").select("entity_id").eq("user_id", USER_ID).eq("entity_type", "team"),
+    ]);
+    const byEspn = new Map(((teamsResult.data ?? []) as Team[]).map(t => [String(t.espn_id), t]));
+    const followed = new Set((followsResult.data ?? []).map(f => f.entity_id));
+    const groups = published.groups.map(g => ({ name: g.name, rows: g.entries.flatMap(e => {
+      const t = byEspn.get(String(e.team.id));
+      if (!t) return [];
+      const v = e.values;
+      const note = e.note?.description ?? "";
+      const zone: LeagueTableRow["zone"] = /relegat/i.test(note) ? "releg" : /champions league/i.test(note) ? "ucl" : /europa league/i.test(note) ? "uel" : /conference league/i.test(note) ? "conf" : null;
+      return [{ team: t.name, teamId: t.id, flag: "⚽", followed: followed.has(t.id), pos: e.rank,
+        crest: { name: t.name, crest_url: t.crest_url ?? e.team.logos?.[0]?.href ?? null, espn_id: t.espn_id, is_national: t.is_national },
+        P: v.gamesPlayed ?? 0, W: v.wins ?? 0, D: v.ties ?? 0, L: v.losses ?? 0,
+        GF: v.pointsFor ?? 0, GA: v.pointsAgainst ?? 0, GD: v.pointDifferential ?? 0, Pts: v.points ?? 0,
+        form: [], zone, group: g.name, qualification: note } satisfies LeagueTableRow];
+    }) }));
+    // Do not silently publish a partially mapped table as a complete source table.
+    if (groups.reduce((n, g) => n + g.rows.length, 0) === published.groups.reduce((n, g) => n + g.entries.length, 0)) {
+      return { league, rows: groups.flatMap(g => g.rows), groups, season: published.season,
+        complete: published.complete, source: "ESPN", sourceUrl: published.sourceUrl, checkedAt: published.checkedAt };
+    }
+  }
+  if (league.format && league.format !== "league") return { league, rows: [], season: null, complete: false, source: "results" };
   const [finalsRes, schedRes, teamsRes, followsRes] = await Promise.all([
     // newest first so the 1000-row page always contains the current season
     s.from("matches").select("*").eq("league_id", leagueId).eq("status", "final")
@@ -333,16 +396,12 @@ export async function standingsForLeague(leagueId: number): Promise<{
   const sched = ((schedRes.data ?? []) as Array<{ season: string | null }>)
     .map(m => ({ ...m, season: normalizeSeason(m.season) }));
 
-  // Which season is "current" for THIS league? The season of its most recent
-  // result — never a date heuristic (calendar leagues like MLS and tournament
-  // years don't share the European Aug–May clock). Once next season's results
-  // start landing, the table rolls over automatically; until then last
-  // season's table shows as explicit FINAL standings, not as a live race.
+  // Fallback uses the newest loaded season and stays explicitly incomplete.
   const season = Array.from(new Set([
     ...finals.map(m => m.season),
     ...sched.map(m => m.season),
   ].filter((x): x is string => !!x))).sort().at(-1) ?? null;
-  const complete = season != null && !sched.some(x => x.season === season);
+  const complete = false; // Missing future fixtures are not proof that a season is over.
   const matches = season
     ? finals.filter(m => m.season === season)
     // legacy rows without a stamped season: fall back to the old date gate
@@ -417,7 +476,7 @@ export async function standingsForLeague(leagueId: number): Promise<{
     else if (rules.conf && i < rules.conf) r.zone = "conf";
     else if (rules.releg && i >= n + rules.releg) r.zone = "releg";
   });
-  return { league, rows, season, complete };
+  return { league, rows, season, complete, groups: [{ name: league.name, rows }], source: "results" };
 }
 
 /** Bulk league lookup, keyed by id. */
@@ -445,13 +504,13 @@ export async function tableableLeagues(): Promise<League[]> {
   const s = await server();
   const { data } = await s.from("leagues").select("*").order("tier").order("name");
   const all = (data ?? []) as League[];
-  const domestic = all.filter(l => (l.format ?? null) === "league");
+  const domestic = all.filter(l => (l.format ?? null) && l.format !== "friendly");
   const list = domestic.length ? domestic : all.filter(l => FALLBACK_TABLE_LEAGUES.includes(l.name));
   // big-5 first, then the rest alphabetically
   return list.sort((a, b) => {
     const ai = FALLBACK_TABLE_LEAGUES.indexOf(a.name);
     const bi = FALLBACK_TABLE_LEAGUES.indexOf(b.name);
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.name.localeCompare(b.name);
+    return (a.name === "MLS" ? -1 : ai === -1 ? 99 : ai) - (b.name === "MLS" ? -1 : bi === -1 ? 99 : bi) || a.name.localeCompare(b.name);
   });
 }
 
@@ -471,7 +530,9 @@ export interface SquadClubGroup {
 export async function squadByClub(countryId: number): Promise<SquadClubGroup[]> {
   const s = await server();
   const { data } = await s.from("players").select("*").eq("country_id", countryId).order("name");
-  const players = (data ?? []) as Player[];
+  const national = await nationalTeamForCountry(countryId);
+  const roster = national ? await currentRosterForTeam(national.id) : null;
+  const players = roster ? matchRosterPlayers((data ?? []) as Player[], roster.names) : (data ?? []) as Player[];
   if (!players.length) return [];
   const clubIds = Array.from(new Set(players.map(p => p.team_id).filter((x): x is number => x != null)));
   const clubs = clubIds.length

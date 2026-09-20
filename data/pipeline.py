@@ -69,7 +69,7 @@ def _ensure_leagues(names: list[str]) -> dict[str, int]:
 
 
 def ingest_espn(days_back: int = 3, days_fwd: int = 7,
-                leagues: list[str] | None = None) -> int:
+                leagues: list[str] | None = None, dates: list[str] | None = None) -> int:
     leagues = leagues or DEFAULT_LEAGUES
     unknown = set(leagues) - set(LEAGUES)
     if unknown:
@@ -77,6 +77,13 @@ def ingest_espn(days_back: int = 3, days_fwd: int = 7,
     league_ids = _ensure_leagues(leagues)
     written = 0
     failures = []
+    team_cache = {}
+    def resolve_team(name, espn_id, logo, league_id, fmt):
+        key = (espn_id or name, league_id, fmt)
+        if key not in team_cache:
+            team_cache[key] = db.get_or_create_team(name=name, league_id=league_id,
+                espn_id=espn_id, league_format=fmt, crest_url=logo)
+        return team_cache[key]
     for name in leagues:
         L = LEAGUES.get(name)
         espn_slug = L.espn if L else LEAGUE_SOURCES.get(name, (None, None))[0]
@@ -84,7 +91,7 @@ def ingest_espn(days_back: int = 3, days_fwd: int = 7,
         style = L.season_style if L else "cross"
         if not espn_slug:
             continue
-        for day in _daterange(days_back, days_fwd):
+        for day in dates or _daterange(days_back, days_fwd):
             try:
                 raw = espn.fetch_day(espn_slug, day)
             except RuntimeError:
@@ -97,16 +104,8 @@ def ingest_espn(days_back: int = 3, days_fwd: int = 7,
                 home = canonical_team(r["home"]); away = canonical_team(r["away"])
                 if not home or not away:
                     continue
-                home_id = db.get_or_create_team(
-                    name=home, league_id=league_ids[name],
-                    espn_id=str(r.get("home_espn_id") or ""), league_format=fmt,
-                    crest_url=r.get("home_logo"),
-                )
-                away_id = db.get_or_create_team(
-                    name=away, league_id=league_ids[name],
-                    espn_id=str(r.get("away_espn_id") or ""), league_format=fmt,
-                    crest_url=r.get("away_logo"),
-                )
+                home_id = resolve_team(home, str(r.get("home_espn_id") or ""), r.get("home_logo"), league_ids[name], fmt)
+                away_id = resolve_team(away, str(r.get("away_espn_id") or ""), r.get("away_logo"), league_ids[name], fmt)
                 winner = None
                 w_name = canonical_team(r.get("winner"))
                 if w_name == home: winner = home_id
@@ -361,7 +360,7 @@ def ingest_player_stats(seasons: list[str], leagues: list[str] | None = None) ->
 # -------------------------- national-team rosters --------------------------
 
 # competition slugs a national team's roster can be fetched under, tried in order
-_ROSTER_SLUGS = ("fifa.world", "fifa.friendly", "fifa.worldq.uefa", "fifa.worldq.conmebol",
+_ROSTER_SLUGS = ("fifa.friendly", "fifa.world", "fifa.worldq.uefa", "fifa.worldq.conmebol",
                  "fifa.worldq.concacaf", "fifa.worldq.afc", "fifa.worldq.caf",
                  "fifa.worldq.ofc", "uefa.nations")
 
@@ -513,6 +512,9 @@ def main() -> int:
             names = [n.strip() for n in os.environ.get("PIPELINE_ESPN_LEAGUES", "").split(",") if n.strip()]
             n = ingest_espn(days_back=days_back, days_fwd=days_fwd, leagues=names or None)
             print(f"[pipeline] fixtures done: {n} matches")
+        elif mode == "refresh":
+            from data.refresh import refresh
+            refresh()
         elif mode == "live":
             if not _live_window_active():
                 print("[pipeline] live: no live matches or kickoffs within ±3h — skipping")

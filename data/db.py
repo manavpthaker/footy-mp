@@ -322,6 +322,14 @@ def upsert_matches(rows: list[dict]) -> list[dict]:
     without = [r for r in rows if not r.get("espn_event_id")]
     out = []
     if with_ev:
+        # Resolve possible Understat placeholders in one read. Most newly
+        # published fixtures and MLS matches have none; do not query once per
+        # event across a full calendar. A full page falls back conservatively.
+        league_ids = list({r["league_id"] for r in with_ev})
+        placeholders = _rows(client().table("matches")
+            .select("league_id,home_team_id,away_team_id,kickoff_utc")
+            .is_("espn_event_id", "null").in_("league_id", league_ids).limit(1000).execute())
+        possible = {(p["league_id"], p["home_team_id"], p["away_team_id"]) for p in placeholders}
         known = {
             h["espn_event_id"] for h in _rows(
                 client().table("matches").select("espn_event_id")
@@ -330,7 +338,8 @@ def upsert_matches(rows: list[dict]) -> list[dict]:
         }
         to_upsert = []
         for r in with_ev:
-            if r["espn_event_id"] not in known:
+            if r["espn_event_id"] not in known and (len(placeholders) >= 1000 or
+                    (r["league_id"], r["home_team_id"], r["away_team_id"]) in possible):
                 claimed = _claim_placeholder(r)
                 if claimed is not None:
                     out.append(claimed)

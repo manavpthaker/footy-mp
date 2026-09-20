@@ -73,13 +73,14 @@ export default async function LeagueDetail({ params }: { params: { id: string } 
               Standings{standings.season ? ` · ${standings.season}` : ""}
               {standings.complete ? " · final" : ""}
             </SectionHeading>
-            <StandingsContext
+            <p className="circle-small">{standings.source === "ESPN" ? <a href={standings.sourceUrl} target="_blank" rel="noreferrer">ESPN source standings ↗</a> : "Calculated from loaded results; coverage may be incomplete."}</p>
+            {(!standings.groups || standings.groups.length === 1) && <StandingsContext
               leagueName={league.name}
               season={standings.season}
               complete={standings.complete}
               rows={rows}
-            />
-            <LeagueStandings rows={JSON.parse(JSON.stringify(rows))} />
+            />}
+            <LeagueStandings rows={JSON.parse(JSON.stringify(rows))} groups={standings.groups} />
           </>
         )}
         {results.length > 0 && (

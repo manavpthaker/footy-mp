@@ -18,7 +18,8 @@ export function StandingsContext({
   complete: boolean;
   rows: StandingRow[];
 }) {
-  const leader = rows[0];
+  const started = rows.some(r => r.P > 0);
+  const leader = started ? rows[0] : undefined;
   const second = rows[1];
   const gap = leader && second ? leader.Pts - second.Pts : null;
   const relegation = rows.filter(row => row.zone === "releg");
@@ -31,13 +32,13 @@ export function StandingsContext({
         display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8,
       }}>
         <ContextItem label={complete ? "Final leader" : "Current leader"}
-          value={leader?.team ?? "No table"}
+          value={leader?.team ?? "Not started"}
           detail={leader ? `${leader.Pts} points` : leagueName} />
-        <ContextItem label="Title gap"
+        <ContextItem label="Gap to next team"
           value={gap == null ? "—" : gap === 0 ? "Level" : `${gap} point${gap === 1 ? "" : "s"}`}
           detail={second ? `to ${second.team}` : "No comparison yet"} />
         <ContextItem label="Table state"
-          value={complete ? "Final" : "In progress"}
+          value={complete ? "Final" : started ? "In progress" : "Not started"}
           detail={[season, relegation.length ? `${relegation.length} relegation places` : null].filter(Boolean).join(" · ") || "Season not stamped"} />
       </div>
       <div style={{

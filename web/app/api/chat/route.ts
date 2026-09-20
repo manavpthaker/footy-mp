@@ -4,7 +4,7 @@ import { getChatConfig } from "@/lib/chat-config";
 import { sameOrigin } from "@/lib/admin";
 import { searchEntities } from "@/lib/search";
 import {
-  standingsForLeague, tableableLeagues, getTeam, getLeague, getMatch,
+  standingsForLeague, tableableLeagues, getTeam, getLeague, getMatch, getCountry, countriesByIds,
   upcomingForTeams, recentResultsForTeams, upcomingAll, resultsAll, liveMatches,
   latestRatingForTeam, formLast5, playersOnTeam, getLowdown, getPlayer,
   playerStatBlocks, squadByClub, recentMovements,
@@ -86,10 +86,12 @@ function buildTools() {
       } as const,
       run: async (input: any) => {
         const r = await searchEntities(String(input.query), 5);
+        const playerCountries = await countriesByIds(r.players.flatMap(p => p.country_id ? [p.country_id] : []));
         return j({
           teams: r.teams.map(t => ({ id: t.id, name: t.name, is_national: t.is_national })),
           players: r.players.map(p => ({
-            id: p.id, name: p.name, position: p.position,
+            id: p.id, name: p.name, position: p.position, country_id: p.country_id,
+            country_connection: p.country_id ? playerCountries[p.country_id]?.name ?? null : null,
             club: p.team_id ? r.playerClubs[p.team_id] ?? null : null,
           })),
           leagues: r.leagues.map(l => ({ id: l.id, name: l.name })),
@@ -173,7 +175,7 @@ function buildTools() {
     functionTool({
       name: "get_player",
       description:
-        "One player id: profile, current club, season and World Cup 2026 stat totals, recent match log.",
+        "One player id: profile, current club and country connection (not a confirmed call-up), season and World Cup 2026 stat totals, recent match log.",
       inputSchema: {
         type: "object",
         properties: { player_id: { type: "integer" } },
@@ -184,12 +186,13 @@ function buildTools() {
         const id = Number(input.player_id);
         const p = await getPlayer(id);
         if (!p) return j({ error: "player not found" });
-        const [club, blocks] = await Promise.all([
+        const [club, blocks, country] = await Promise.all([
           p.team_id ? getTeam(p.team_id) : null,
           playerStatBlocks(id, 5),
+          p.country_id ? getCountry(p.country_id) : null,
         ]);
         return j({
-          player: { id: p.id, name: p.name, position: p.position, club: club?.name ?? null },
+          player: { id: p.id, name: p.name, position: p.position, club: club?.name ?? null, country_connection: country?.name ?? null, country_id: p.country_id },
           season_totals: blocks.season, world_cup_2026: blocks.worldCup,
           recent_matches: blocks.log,
         });
